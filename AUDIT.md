@@ -1,11 +1,10 @@
 # OpenEMR System Audit
 
-**Repository:** `openemr-base-clean`
-**Date:** 2026-07-06
-**Method:** Read-only static analysis of the working tree (including the uncommitted AI patient-history-summary feature) plus live queries against the running `development-easy` dev database (1,000 generated sample patients).
-**Scope:** Five audits — Security, Performance, Architecture, Data Quality, and Compliance & Regulatory.
+The below is a system audit per directions in the Project Requirements Document "AgentForge Clinical Co-Pilot".  The Challenger is directed to determine the best course of action to develop an AI agent that will be integrated into the existing OpenEMR application. The architecture for this project is developed under separate cover.  
 
-> All file/line references point at the current working tree. Severities are the auditor's assessment for a HIPAA-regulated production deployment. This document is analysis only; **no remediation has been applied.**
+The scope of this document is to audit the OpenEMR application to accommodate the AI agent, because the agent must meet specific functional requirements that both meet customer needs and assure that patient records contained in the application or passed to other services do not violate HIPAA guidelines for patient privacy.  
+
+This audit was performed using the Opus 4.3 agent in the CursorAI IDE.  No remediation has been completed, but will be documented with functional versions of the agent.  
 
 ---
 
@@ -23,21 +22,33 @@
 
 ## 1. One-Page Summary — Key Findings
 
-OpenEMR is a mature, hybrid PHP EHR: legacy procedural code (`/library`, `/interface`) sits alongside a modern PSR-4 service layer (`/src`). MySQL is the system of record; the REST/FHIR API runs on a Symfony HttpKernel stack, while every web request boots the ~863-line `interface/globals.php`. This audit spans five dimensions — security, performance, architecture, data quality, and compliance — grounded in code (file:line) and live queries against 1,000 synthetic sample patients. The full risk register at the end ranks every finding by severity; the items below are the ones that will most shape a trustworthy Clinical Co-Pilot.
+OpenEMR is a trusted product currently in use by Primary Care Offices. It uses PHP EHR, MySQL, a REST/FHIR API runs on a Symfony HttpKernel stack, while every web request boots the ~863-line `interface/globals.php`. 
 
-The single most consequential artifact is the in-progress **AI patient-history-summary feature**, which recurs across every lens and previews the risks of the agent to come.
+This audit uses five dimensions as listed in the table of contents, and has been demonstrated with live queries against 1,000 synthetic sample patients. 
 
-**Security & compliance (highest priority).** The AI path transmits clinical PHI (encounter reason, social history, active problems) to OpenAI with **no programmatic BAA / zero-retention gate** — the only control is a code comment (S-1 / C-5, Critical). It writes **no audit entry**, so PHI disclosures are invisible to the audit trail and cannot satisfy HIPAA's accounting-of-disclosures duty or scope a breach (S-2 / C-1, High). It is authorized with the demographics scope (`patients/demo`) though it reads medical history — a least-privilege violation (S-3, High). Separately, the REST layer returns raw exception messages to clients, leaking internals (S-4, High), and `patient_data` is unencrypted at the application layer, forfeiting HIPAA's encryption safe harbor for at-rest breaches (S-6). OpenEMR's own audit system is strong (tamper-evident SHA3-512 checksums, IHE ATNA export, break-glass) but is disable-able and, critically, not invoked by the AI path.
+The live patient database was generated using the following query:  
 
-**Performance & latency.** The AI call is **synchronous, uncached, and blocks for up to 30 seconds** with no async/queue (P-1, Critical for UX). Before it ever calls the model it runs 3+ heavy sequential service queries, and the REST entry resolves a patient UUID→pid through a 3-query `PatientService` search (P-4 / P-5). The REST path also holds the **session write-lock** for the entire external call, serializing concurrent requests (P-2). `patient_data.pubpid` — the very column the sample generator populates — has **no index** and will table-scan at volume (P-6). These are the hard latency floors the agent must design around: expect ≥1s best case, 2–15s typical, 30s worst.
+"Create sample patient data for 1000 patients to be used by OpenEMR.  The sample data must include patient names, sex, birthdate, ethnicity, intake information 85% of patients with 15% new patients and should be identified as having no patient history.  10% of new patients have identified a visit condition with the remaining 5% reporting a wellness visit, meaning they have no problems.  90% of all patients have some prescription medication either current or recently discontinued.  87% have bloodwork with 13% having some abnormality like high a1C, low testosterone, or high white blood cell count."
 
-**Architecture.** New capabilities integrate cleanly through the modern service layer plus a REST route (with an event-based alternative via `RestApiCreateEvent`) or through custom modules. The AI feature follows this pattern well on the service/REST side, but hooks the UI as inline HTML/JS in `demographics.php` rather than the event/card system — a maintainability smell not to repeat.
+This database was generated to demonstrate what kind of information streams the agent should be able to handle.
 
-**Data quality.** The sample dataset is internally clean and referentially intact (no duplicates, no orphan records, valid formats), but has systematic gaps that are direct **agent failure modes**: SSN and primary-provider are 100% empty, `sex` is binary-only, and phone/email formats are unrealistically uniform. Because it is synthetic, it will not surface the dirty-data problems real records carry — the agent's eval suite must inject those deliberately.
+The full risk register at the end ranks every finding by severity and will need to be addressed during the development of the Co-Pilot.
 
-**Bottom line:** the agent's trust, speed, and compliance posture all hinge on fixing the AI PHI path — BAA/ZDR gating, disclosure auditing, correct authorization scope, response caching, and async execution — *before* scaling it into a Clinical Co-Pilot.
+**Bottom Line Up Front:** the OpenEMR requires a series of remediations that have been documented in this audit in order to operate as a functional environment for the AI agent to be introduced.  A risk register was generated and will be incorporated into development plans going forward.
+
+**Security & compliance (highest priority).** 
+Currently, the AI path that transmits PHI (intake notes and patient records), does so to OpenAI with no programmatic BAA/zero-retention gate.  This is noted in S-1/C-5.  Per the comment there is no audit entry so PHI disclosures are invisible to the audit trail, which means that HIPAA standards for accountability cannot be met.  Other issues detected by the audit include a least-privilege violation, and there is no real encryption for patient data at the application layer.  All of these issues will need to be remediated before any interfaces can be developed and employed.  
+
+**Performance & latency.** There are several system calls that will cause serious latency issues with the system. (P-1, Critical for UX, P-2, P-4, P-5 and P-6). Data calls are either passed through multiple processes or subject to write-locks and will cause latencies of up to 30 seconds, which will violate the medical professional's need to have all information at hand in under 90 seconds for review and employment.
+
+**Architecture.** New capabilities feature a sidecar-type application that will require a REST API.  Additionally, Railway will be employed for cloud deployment.  
+
+**Data quality.** The sample dataset is internally clean and referentially intact (no duplicates, no orphan records, valid formats), but has systematic gaps that are direct agent failure modes: SSN and primary-provider are 100% empty, `sex` is binary-only, and phone/email formats are unrealistically uniform. This list was synthesized by the developer and will need improvement before further testing.  
+
 
 ---
+
+The audits below were generated using the information supplied.  The recommendations at the bottom of each section will be incorporated into the Plan of Action for the development of the Co-Pilot.  
 
 ## 2. Security Audit
 
