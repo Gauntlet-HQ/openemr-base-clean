@@ -36,6 +36,7 @@ use OpenEMR\RestControllers\InsuranceCompanyRestController;
 use OpenEMR\RestControllers\InsuranceRestController;
 use OpenEMR\RestControllers\ListRestController;
 use OpenEMR\RestControllers\MessageRestController;
+use OpenEMR\RestControllers\PatientHistorySummaryRestController;
 use OpenEMR\RestControllers\PatientRestController;
 use OpenEMR\RestControllers\PractitionerRestController;
 use OpenEMR\RestControllers\PrescriptionRestController;
@@ -99,6 +100,12 @@ return [
     "GET /api/patient/:puuid" => function ($puuid, HttpRestRequest $request) {
         RestConfig::request_authorization_check($request, "patients", "demo");
         $return = (new PatientRestController())->getOne($puuid, $request);
+
+        return $return;
+    },
+    "GET /api/patient/:puuid/history_summary" => function ($puuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "patients", "demo");
+        $return = (new PatientHistorySummaryRestController())->getSummary($puuid, $request);
 
         return $return;
     },

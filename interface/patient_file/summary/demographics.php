@@ -1088,6 +1088,42 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
         ?>
         <div class="main mb-1">
             <!-- start main content div -->
+            <?php if (AclMain::aclCheckCore('patients', 'demo')) { ?>
+            <div class="row">
+                <div class="col-12 p-1">
+                    <div class="card">
+                        <div class="card-body py-2 d-flex align-items-center flex-wrap">
+                            <button type="button" id="ai_history_summary_btn" class="btn btn-primary btn-sm mr-2" onclick="loadAiHistorySummary()">
+                                <i class="fa fa-robot mr-1"></i><?php echo xlt('AI History Summary'); ?>
+                            </button>
+                            <span id="ai_history_summary_result" class="text-muted"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                function loadAiHistorySummary() {
+                    const btn = document.getElementById('ai_history_summary_btn');
+                    const out = document.getElementById('ai_history_summary_result');
+                    top.restoreSession();
+                    btn.disabled = true;
+                    out.textContent = <?php echo js_escape(xl('Generating summary...')); ?>;
+                    const body = new FormData();
+                    body.append('csrf_token_form', <?php echo js_escape(CsrfUtils::collectCsrfToken(session: $session)); ?>);
+                    fetch('ai_history_summary.php', { method: 'POST', credentials: 'same-origin', body: body })
+                        .then(response => response.json())
+                        .then(data => {
+                            out.textContent = data.summary || data.error || <?php echo js_escape(xl('No summary available.')); ?>;
+                        })
+                        .catch(() => {
+                            out.textContent = <?php echo js_escape(xl('Unable to generate the summary.')); ?>;
+                        })
+                        .finally(() => {
+                            btn.disabled = false;
+                        });
+                }
+            </script>
+            <?php } ?>
             <div class="row">
                 <?php
                 $t = $twig->getTwig();
