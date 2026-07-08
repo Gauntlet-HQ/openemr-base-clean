@@ -80,4 +80,7 @@ COPY railway/entrypoint.sh /usr/local/bin/openemr-railway-entrypoint.sh
 RUN chmod 555 /usr/local/bin/openemr-railway-entrypoint.sh
 
 WORKDIR /var/www/localhost/htdocs
+# Clear the flex base image CMD (./openemr.sh) so Railway does not inherit a
+# dev-runtime startup when a custom startCommand is applied.
 ENTRYPOINT ["/usr/local/bin/openemr-railway-entrypoint.sh"]
+CMD []

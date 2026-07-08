@@ -154,6 +154,14 @@ docker build --build-arg GITHUB_TOKEN=ghp_xxx -t openemr-railway .
 
 ## Troubleshooting
 
+- **`docker-entrypoint.sh` / `mysqld` errors on the OpenEMR service** — a
+  MySQL-style start command was applied to the wrong service (or copied from a
+  database fix). OpenEMR must **not** use `docker-entrypoint.sh` or `mysqld`.
+  In the **OpenEMR** service → **Settings** → **Start Command**, either clear
+  the field entirely or set it to:
+  `/usr/local/bin/openemr-railway-entrypoint.sh`
+  Then redeploy. This repo also ships `railway.json` with the correct command so
+  future deploys override a bad dashboard value automatically.
 - **`MYSQL_HOST is required` / setup loops** — the DB variable references aren't
   resolving. Confirm the MySQL service name in the `${{...}}` references and that
   both services share the project's private network.
