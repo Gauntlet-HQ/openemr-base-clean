@@ -1,0 +1,11 @@
+meta {
+  name: 04 - Health and Ready
+  seq: 5
+}
+
+docs {
+  `GET health.php` and `GET ready.php` (ARCHITECTURE.md §3.4). Real
+  files: `public/health.php`, `public/ready.php`. Both are deliberately
+  UNAUTHENTICATED (no login/CSRF needed) -- an uptime prober cannot hold
+  an EMR session. Can be run before or independent of every other folder.
+}

@@ -1,0 +1,50 @@
+meta {
+  name: 1 - Start Session
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/chat.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  action: start
+  pid: {{pid}}
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  Opens a chat session pinned to `{{pid}}` (I10 -- pid is a server-side
+  session field from here on, no tool call ever accepts one), pre-seeded
+  from that patient's current synthesis fact set
+  (`ChatController::startSession`). Fails with `ok:false,
+  reason:"synthesis unavailable -- open the synthesis doc first"` if no
+  doc exists yet for this pid -- run "01 - Synthesis Doc / 1 - Get Doc
+  (view)" at least once first.
+
+  Example success response:
+  ```json
+  { "ok": true, "session_id": 42, "reason": null }
+  ```
+}
+
+script:post-response {
+  const data = res.getBody();
+  if (data && data.ok && data.session_id) {
+    bru.setVar("session_id", data.session_id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("session started", function () {
+    const data = res.getBody();
+    expect(data.ok, data.reason || "see 'reason' in response body").to.equal(true);
+    expect(data.session_id).to.be.a("number");
+  });
+}

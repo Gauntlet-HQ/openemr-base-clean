@@ -1,0 +1,8 @@
+# Tiny upload for flex image (full OpenEMR clones from GitHub at runtime).
+*
+
+!railway.toml
+!Dockerfile.railway
+!railway-entrypoint.sh
+!railway-flex-bootstrap.sh
+!patch-flex-openemr.sh

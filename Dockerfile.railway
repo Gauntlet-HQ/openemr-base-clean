@@ -1,0 +1,18 @@
+# Railway deploy — thin wrapper around openemr/openemr:flex.
+# Kept at repo root so `railway up` archives include it (.railwayignore allow-list).
+
+FROM openemr/openemr:flex
+
+ENV FLEX_REPOSITORY=https://github.com/GiantBeaver9/openemr-base-clean.git \
+    FLEX_REPOSITORY_BRANCH=main
+
+COPY patch-flex-openemr.sh railway-flex-bootstrap.sh railway-entrypoint.sh /tmp/railway/
+RUN chmod 755 /tmp/railway/patch-flex-openemr.sh /tmp/railway/railway-flex-bootstrap.sh /tmp/railway/railway-entrypoint.sh \
+    && cp /tmp/railway/railway-flex-bootstrap.sh /usr/local/bin/railway-flex-bootstrap.sh \
+    && /tmp/railway/patch-flex-openemr.sh \
+    && cp /tmp/railway/railway-entrypoint.sh /usr/local/bin/railway-entrypoint.sh \
+    && rm -rf /tmp/railway
+
+EXPOSE 80 443
+
+ENTRYPOINT ["/usr/local/bin/railway-entrypoint.sh"]

@@ -1,0 +1,257 @@
+{#
+# Clinical Co-Pilot -- chat panel (U11), included from doc.html.twig beside
+# the synthesis doc (ARCHITECTURE.md §1: "a chat panel rendered beside each
+# patient's pre-visit synthesis").
+#
+# Facts-first rendering carries over here too (ARCHITECTURE.md §2.5): every
+# turn's cited facts render in the SAME fact-table shape doc.html.twig uses,
+# never prose-only. Autoescape is globally OFF -- every dynamic value below
+# is explicitly escaped with |text, |attr, |xlt, or |xla; the chat turns
+# themselves are rendered by inline JS (`renderTurn()`), which uses
+# `textContent`/DOM APIs exclusively (never innerHTML with server/model
+# text) so a physician-composed message or a model claim can never inject
+# markup, independent of this template's own escaping discipline.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<div class="card mb-3" id="ccpChatPanel" data-pid="{{ pid|attr }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>{{ "Ask a follow-up"|xlt }}</strong>
+        <small class="text-muted">{{ "pinned to this patient -- answers cite the same facts as the synthesis above"|xlt }}</small>
+    </div>
+    <div class="card-body">
+        {# csrfToken() (no args) renders a whole <input type="hidden" ...> tag,
+           not a bare value -- using it here would embed that entire markup
+           string as this input's `value` attribute instead of the token
+           itself, so the JS below would POST the literal HTML back to
+           chat.php and fail CSRF on every request. csrfTokenRaw() returns just
+           the token string, which is what a JS-read hidden value needs. #}
+        <input type="hidden" id="ccpChatCsrf" value="{{ csrfTokenRaw()|attr }}">
+        <input type="hidden" id="ccpChatUrl" value="{{ chat_url|attr }}">
+        <input type="hidden" id="ccpStatusUrl" value="{{ status_url|attr }}">
+
+        <div id="ccpChatFrozenBanner" class="alert alert-danger" style="display:none;">
+            {{ "This conversation is locked following a patient-identity verification incident and cannot be resumed. The synthesis above remains valid -- it passed its own verification when generated."|xlt }}
+        </div>
+
+        <div id="ccpChatStaleBanner" class="alert alert-warning" style="display:none;">
+            {{ "The chart has changed since this summary -- "|xlt }}
+            <a href="#" id="ccpChatReseedLink">{{ "refresh to re-seed"|xlt }}</a>.
+        </div>
+
+        <div id="ccpChatTurns" class="mb-3" style="max-height: 420px; overflow-y: auto;"></div>
+
+        <div id="ccpChatStatus" class="text-muted small mb-2" style="display:none;"></div>
+
+        <form id="ccpChatForm" class="form-inline">
+            <input type="text" id="ccpChatMessage" class="form-control mr-2" style="flex:1;"
+                   placeholder="{{ 'e.g. \"and the one before that?\"'|attr }}" maxlength="4000" autocomplete="off">
+            <button type="submit" class="btn btn-primary" id="ccpChatSend">{{ "Ask"|xlt }}</button>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    // Reference client: uses the plain synchronous POST (chat.php's default
+    // non-streamed response) as its ONLY transport -- always correct, since
+    // the server executes the turn identically either way (ARCHITECTURE.md
+    // §1.3: "the request IS the turn"). `statusUrl` is wired through and
+    // `chat.php` fully supports `stream=1` (SSE) plus `status.php` polling
+    // server-side (see ChatController::pollStatus()); a richer client that
+    // opens the SSE stream and falls back to polling `statusUrl` on a
+    // buffering proxy is straightforward to layer on here later without any
+    // server-side change -- deliberately left out of this reference
+    // implementation to keep it simple and easy to verify by reading.
+    var panel = document.getElementById('ccpChatPanel');
+    var pid = panel.getAttribute('data-pid');
+    var chatUrl = document.getElementById('ccpChatUrl').value;
+    var statusUrl = document.getElementById('ccpStatusUrl').value; // eslint-disable-line no-unused-vars
+    var csrf = document.getElementById('ccpChatCsrf').value;
+    var turnsEl = document.getElementById('ccpChatTurns');
+    var statusEl = document.getElementById('ccpChatStatus');
+    var form = document.getElementById('ccpChatForm');
+    var input = document.getElementById('ccpChatMessage');
+    var sendBtn = document.getElementById('ccpChatSend');
+    var frozenBanner = document.getElementById('ccpChatFrozenBanner');
+    var staleBanner = document.getElementById('ccpChatStaleBanner');
+    var reseedLink = document.getElementById('ccpChatReseedLink');
+    var sessionId = null;
+    var frozen = false;
+
+    function setStatus(text) {
+        if (!text) {
+            statusEl.style.display = 'none';
+            return;
+        }
+        statusEl.style.display = '';
+        statusEl.textContent = text;
+    }
+
+    function appendLine(role, text) {
+        var row = document.createElement('div');
+        row.className = 'ccp-narrative-claim';
+        var strong = document.createElement('strong');
+        strong.textContent = role + ': ';
+        row.appendChild(strong);
+        row.appendChild(document.createTextNode(text));
+        turnsEl.appendChild(row);
+        turnsEl.scrollTop = turnsEl.scrollHeight;
+    }
+
+    function renderTurnResult(result) {
+        if (result.frozen) {
+            frozen = true;
+            frozenBanner.style.display = '';
+            form.style.display = 'none';
+            appendLine('Assistant', result.degraded_message || "couldn't produce a verifiable answer");
+            return;
+        }
+
+        if (result.stale) {
+            staleBanner.style.display = '';
+        }
+
+        if (Array.isArray(result.claims) && result.claims.length > 0) {
+            var texts = [];
+            for (var i = 0; i < result.claims.length; i++) {
+                texts.push(result.claims[i].text);
+            }
+            appendLine('Assistant', texts.join(' '));
+        } else if (result.degraded_message) {
+            appendLine('Assistant', result.degraded_message);
+        }
+
+        if (Array.isArray(result.tool_calls)) {
+            for (var j = 0; j < result.tool_calls.length; j++) {
+                var call = result.tool_calls[j];
+                if (!call.ok) {
+                    appendLine('System', 'tool ' + call.tool + ' failed: ' + call.error);
+                }
+            }
+        }
+    }
+
+    function replayTurn(turn) {
+        if (turn.role === 'physician' && turn.text) {
+            appendLine('Physician', turn.text);
+            return;
+        }
+        if (turn.role === 'assistant' && turn.result) {
+            renderTurnResult(turn.result);
+        }
+    }
+
+    function reseedFromCurrentSummary(showSystemLine) {
+        var body = new FormData();
+        body.append('action', 'reseed');
+        body.append('pid', pid);
+        body.append('csrf_token_form', csrf);
+
+        return fetch(chatUrl, { method: 'POST', body: body, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.ok) {
+                    return data;
+                }
+                sessionId = data.session_id;
+                staleBanner.style.display = 'none';
+                turnsEl.innerHTML = '';
+                if (Array.isArray(data.turns)) {
+                    for (var i = 0; i < data.turns.length; i++) {
+                        replayTurn(data.turns[i]);
+                    }
+                }
+                if (showSystemLine && (data.turns === undefined || data.turns.length === 0)) {
+                    appendLine('System', 'started a fresh conversation from the current summary.');
+                }
+                return data;
+            });
+    }
+
+    async function startSession() {
+        var body = new FormData();
+        body.append('action', 'start');
+        body.append('pid', pid);
+        body.append('csrf_token_form', csrf);
+
+        try {
+            var response = await fetch(chatUrl, { method: 'POST', body: body, credentials: 'same-origin' });
+            var data = await response.json();
+            if (data.ok) {
+                sessionId = data.session_id;
+                if (data.stale) {
+                    staleBanner.style.display = '';
+                }
+                if (Array.isArray(data.turns)) {
+                    for (var i = 0; i < data.turns.length; i++) {
+                        replayTurn(data.turns[i]);
+                    }
+                }
+            } else {
+                setStatus(data.reason || 'chat unavailable');
+            }
+        } catch (err) {
+            setStatus('chat unavailable');
+        }
+    }
+
+    async function submitTurn(message) {
+        if (!sessionId || frozen) {
+            return;
+        }
+        sendBtn.disabled = true;
+        setStatus('sending…');
+
+        var body = new FormData();
+        body.append('action', 'turn');
+        body.append('session_id', sessionId);
+        body.append('message', message);
+        body.append('csrf_token_form', csrf);
+
+        try {
+            var response = await fetch(chatUrl, { method: 'POST', body: body, credentials: 'same-origin' });
+            var data = await response.json();
+            setStatus(null);
+            sendBtn.disabled = false;
+            if (data.ok === false) {
+                appendLine('System', data.reason || 'the turn could not be completed');
+                return;
+            }
+            renderTurnResult(data);
+        } catch (err) {
+            setStatus(null);
+            sendBtn.disabled = false;
+            appendLine('System', 'network error -- the turn may still complete server-side; try again shortly');
+        }
+    }
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var message = input.value.trim();
+        if (message === '') {
+            return;
+        }
+        appendLine('Physician', message);
+        input.value = '';
+        submitTurn(message);
+    });
+
+    reseedLink.addEventListener('click', function (event) {
+        event.preventDefault();
+        reseedFromCurrentSummary(true);
+    });
+
+    document.addEventListener('ccp-summary-regenerated', function () {
+        reseedFromCurrentSummary(false);
+    });
+
+    startSession();
+})();
+</script>

@@ -1,0 +1,55 @@
+meta {
+  name: 3 - Bootstrap CSRF Token
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/doc.php?pid={{pid}}
+  body: none
+  auth: none
+}
+
+query {
+  pid: {{pid}}
+}
+
+docs {
+  A GET view performs no write, so `doc.php` requires no CSRF token to
+  view it -- but the page it renders embeds one, for its own Regenerate
+  form and chat panel. This request scrapes that token out of the HTML
+  (via the chat panel's `#ccpChatCsrf` hidden input, which carries the
+  bare token string) and stores it in the runtime variable `csrf_token`,
+  which every state-changing request in this collection sends back as
+  `csrf_token_form`.
+
+  Requires `{{pid}}` to be a patient the seeded synthesis doc actually
+  exists for (see U2 seed / `tests/Seed/fixtures/expected/landmines.json`,
+  `CCP-001` = pid 1 by default in a freshly seeded dev stack) -- the chat
+  panel (and therefore the token) only renders when `doc.php` finds a
+  patient AND a computed synthesis for them.
+}
+
+script:post-response {
+  const body = res.getBody();
+  const match = typeof body === "string" ? body.match(/id="ccpChatCsrf"\s+value="([^"]*)"/) : null;
+
+  if (!match || !match[1]) {
+    throw new Error(
+      "Could not find the CSRF token in doc.php's response for pid=" + bru.getVar("pid") + ". " +
+      "Likely causes: login (request 2) failed, or this pid has no seeded synthesis doc yet " +
+      "(run the U2 seed script -- tests/Seed/SeedClinicalCopilot.php -- against this stack first)."
+    );
+  }
+
+  bru.setVar("csrf_token", match[1]);
+}
+
+tests {
+  test("doc page rendered for an authenticated session", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("csrf_token captured", function () {
+    expect(bru.getVar("csrf_token")).to.be.a("string").and.not.empty;
+  });
+}

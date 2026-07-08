@@ -1,0 +1,34 @@
+# Clinical Co-Pilot -- local compose overlay.
+#
+# Layered ON TOP of the maintained dev stack (docker/development-easy/docker-compose.yml)
+# via `-f`, so it stays inside the module directory (additivity). It only *adds*
+# environment variables to the openemr service (compose merges environment maps),
+# passing the LLM credentials through from your host shell into the container.
+#
+# Used automatically by ops/local/setup.sh. To use manually:
+#   docker compose \
+#     -f docker/development-easy/docker-compose.yml \
+#     -f interface/modules/custom_modules/oe-module-clinical-copilot/ops/local/compose.gemini.yml \
+#     up -d
+#
+# Set the key in your host shell first (dev/test, synthetic data only -- see
+# ../../docs/configuration.md for the loud PHI warning):
+#   export CLINICAL_COPILOT_GEMINI_API_KEY=your_ai_studio_key
+# ...or copy ops/local/gemini.local.env.example -> gemini.local.env and edit it.
+# ...or, for the Vertex production path:
+#   export CLINICAL_COPILOT_GCP_PROJECT_ID=your-project
+#   export CLINICAL_COPILOT_GCP_LOCATION=us-central1
+#   # + mount/point GOOGLE_APPLICATION_CREDENTIALS at your service-account json
+services:
+  openemr:
+    env_file:
+      - path: gemini.local.env
+        required: false
+    environment:
+      # Do not set CLINICAL_COPILOT_GEMINI_API_KEY here — an empty host
+      # interpolation overrides env_file above. Use gemini.local.env (Option A)
+      # or export on the host before `compose up` and add the same key to
+      # gemini.local.env for Apache/PHP (Option B + file fallback in LlmEnv).
+      CLINICAL_COPILOT_GEMINI_API_MODEL: "${CLINICAL_COPILOT_GEMINI_API_MODEL:-gemini-2.5-flash}"
+      CLINICAL_COPILOT_GCP_PROJECT_ID: "${CLINICAL_COPILOT_GCP_PROJECT_ID:-}"
+      CLINICAL_COPILOT_GCP_LOCATION: "${CLINICAL_COPILOT_GCP_LOCATION:-us-central1}"

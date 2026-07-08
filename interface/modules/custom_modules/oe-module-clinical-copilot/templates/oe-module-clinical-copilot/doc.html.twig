@@ -1,0 +1,878 @@
+{#
+# Clinical Co-Pilot -- pre-visit synthesis doc page (U8).
+#
+# Facts-first rendering (ARCHITECTURE.md §2.5): the full fact table is
+# ALWAYS rendered beside the narrative -- prose is never the only view.
+# Autoescape is globally OFF for this project (build-notes.md) -- every
+# piece of dynamic output below is explicitly escaped with |text, |attr,
+# |xlt, or |xla.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+{% macro citation_refs(citations) %}
+    {% for c in citations %}
+        {% if c.url %}
+            <a href="{{ c.url|attr }}" target="_blank" rel="noopener" class="ccp-citation" title="{{ c.label|attr }}">[{{ c.label|text }}]</a>
+        {% else %}
+            <span class="ccp-citation ccp-citation-tooltip" title="{{ c.label|attr }}">[{{ c.label|text }}]</span>
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+
+{% macro narrative_action_form(doc_url, needs_generation) %}
+    <input type="hidden" id="ccpDocUrl" value="{{ doc_url|attr }}">
+    <input type="hidden" id="ccpStatusUrl" value="{{ status_url|attr }}">
+    <input type="hidden" id="ccpDocCsrf" value="{{ csrfTokenRaw()|attr }}">
+    <button type="button" id="ccpNarrativeBtn" class="btn btn-sm {% if needs_generation %}btn-primary{% else %}btn-secondary{% endif %}"
+            data-needs-generation="{{ needs_generation ? '1' : '0' }}">
+        <i class="fa {% if needs_generation %}fa-magic{% else %}fa-refresh{% endif %} mr-1" id="ccpNarrativeBtnIcon"></i>
+        <span id="ccpNarrativeBtnLabel">
+            {% if needs_generation %}
+                {{ "Generate narrative"|xlt }}
+            {% else %}
+                {{ "Regenerate"|xlt }}
+            {% endif %}
+        </span>
+    </button>
+{% endmacro %}
+
+{% macro section_divider() %}
+    <div class="ccp-section-divider" role="separator" aria-hidden="true"></div>
+{% endmacro %}
+
+{% macro status_pipe() %}
+    <span class="ccp-pipe" aria-hidden="true">|</span>
+{% endmacro %}
+
+{% macro source_cell(citations, visit_label) %}
+    <div class="ccp-source-cell">
+        <div class="ccp-source-record">{{ _self.citation_refs(citations) }}</div>
+        {% if visit_label %}
+            <div class="ccp-source-visit text-muted small mt-1">
+                <i class="fa fa-calendar-check-o mr-1" aria-hidden="true"></i>{{ visit_label|text }}
+            </div>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% macro fact_row(fact, visit_label) %}
+    <tr class="{% if fact.flags is defined and 'conflict' in fact.flags %}table-warning{% elseif fact.is_excluded is defined and fact.is_excluded %}table-light text-muted{% endif %}">
+        <td>{{ fact.kind_label|default(fact.kind)|text }}</td>
+        <td>
+            {%- if fact.parsed is not null -%}
+                {{ fact.comparator != 'none' ? (fact.comparator == 'lt' ? '<' : (fact.comparator == 'lte' ? '<=' : (fact.comparator == 'gt' ? '>' : '>='))) : '' }}{{ fact.parsed }}{{ fact.unit ? ' ' ~ fact.unit|text : '' }}
+            {%- else -%}
+                {{ fact.raw|default('')|text }}
+            {%- endif -%}
+        </td>
+        <td>{{ fact.status_label|default(fact.status)|text }}</td>
+        <td>{{ fact.clinical_date ? fact.clinical_date|text : '—' }}</td>
+        <td>
+            {% for label in fact.flag_labels|default(fact.flags) %}
+                <span class="badge badge-secondary">{{ label|text }}</span>
+            {% endfor %}
+        </td>
+        <td>{{ _self.source_cell(fact.citations, visit_label) }}</td>
+    </tr>
+{% endmacro %}
+
+{% macro facts_table(visit_label) %}
+    <thead><tr>
+        <th>{{ "Type"|xlt }}</th><th>{{ "Value"|xlt }}</th><th>{{ "Status"|xlt }}</th>
+        <th>{{ "Date"|xlt }}</th><th>{{ "Flags"|xlt }}</th><th>{{ "Source / Visit"|xlt }}</th>
+    </tr></thead>
+{% endmacro %}
+
+<html>
+<head>
+    <title>{{ "Clinical Co-Pilot"|xlt }}</title>
+    {{ setupHeader() }}
+    <style>
+        .ccp-citation { text-decoration: none; font-size: 0.85em; }
+        .ccp-citation-tooltip { color: #6c757d; cursor: help; border-bottom: 1px dotted #6c757d; }
+        .ccp-badge-checked { cursor: help; }
+        .ccp-narrative-claim { margin-bottom: 0.75rem; }
+        .ccp-history-table th, .ccp-history-table td { font-size: 0.85em; }
+        .ccp-section-divider {
+            border-top: 1px solid #ced4da;
+            margin: 1rem 0;
+        }
+        .ccp-pipe {
+            color: #adb5bd;
+            padding: 0 0.65rem;
+            font-weight: 300;
+            user-select: none;
+        }
+        .ccp-status-rail {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.35rem 0;
+            padding: 0.35rem 0;
+        }
+        .ccp-meta-line {
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+        .ccp-section-title h4 {
+            margin-bottom: 0;
+        }
+        .ccp-source-cell {
+            line-height: 1.35;
+        }
+        .ccp-source-record {
+            font-size: 0.9rem;
+        }
+        .ccp-source-visit {
+            font-size: 0.8rem;
+        }
+        .ccp-main-layout {
+            align-items: flex-start;
+        }
+        .ccp-primary-column {
+            min-width: 0;
+        }
+        .ccp-facts-column {
+            position: sticky;
+            top: 0.75rem;
+            max-height: calc(100vh - 1.5rem);
+            overflow-y: auto;
+        }
+        .ccp-facts-column .card-body {
+            padding-top: 0.75rem;
+        }
+        .ccp-facts-group-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 0.75rem 0 0.5rem;
+        }
+        .ccp-facts-group-title:first-child {
+            margin-top: 0;
+        }
+        @media (max-width: 991.98px) {
+            .ccp-facts-column {
+                position: static;
+                max-height: none;
+                overflow: visible;
+                margin-top: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="body_top">
+{% if not landing and patient %}
+<span class="title d-none">{{ "Appointment Copilot"|xlt }} — {{ patient.name|text }}</span>
+{% elseif landing %}
+<span class="title d-none">{{ "Clinical Co-Pilot"|xlt }}</span>
+{% endif %}
+{% if show_patient_chart_nav %}
+<div id="container_div" class="container-fluid mt-3">
+    <div class="row">
+        <div class="col-sm-12 ccp-chart-chrome">
+            {{ patient_chart_nav_html|raw }}
+        </div>
+    </div>
+    {{ _self.section_divider() }}
+    <div class="row">
+        <div class="col-sm-12">
+{% endif %}
+<div class="container-fluid{% if not show_patient_chart_nav %} mt-3{% endif %} ccp-page">
+    <section class="ccp-section ccp-section-title">
+    <div class="row mb-0">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h4>
+                <i class="fa fa-user-md mr-2"></i>
+                {% if landing %}
+                    {{ "Clinical Co-Pilot -- Today's Schedule"|xlt }}
+                {% else %}
+                    {{ "Clinical Co-Pilot -- Pre-Visit Synthesis"|xlt }}
+                    {% if patient %}
+                        <small class="text-muted">{{ patient.name|text }} ({{ patient.mrn|text }})</small>
+                    {% endif %}
+                {% endif %}
+            </h4>
+            {% if not landing and found %}
+                <a class="btn btn-sm btn-outline-secondary" href="{{ doc_landing_url|attr }}">
+                    <i class="fa fa-calendar mr-1"></i>{{ "Back to today's schedule"|xlt }}
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    </section>
+
+    {% if landing %}
+        {{ _self.section_divider() }}
+        <section class="ccp-section">
+        <p class="text-muted mb-3">{{ "Pick a scheduled patient to open the pre-visit synthesis and follow-up chat."|xlt }}</p>
+        {% if scheduled_patients is not empty %}
+            <div class="card mb-4">
+                <div class="card-header"><strong>{{ "Scheduled today"|xlt }}</strong></div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                        <tr>
+                            <th>{{ "Time"|xlt }}</th>
+                            <th>{{ "Patient"|xlt }}</th>
+                            <th>{{ "MRN"|xlt }}</th>
+                            <th>{{ "Visit"|xlt }}</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in scheduled_patients %}
+                            <tr>
+                                <td>{{ row.appointmentTime|text }}</td>
+                                <td>{{ row.displayName|text }}</td>
+                                <td>{{ row.pubpid|text }}</td>
+                                <td>{{ row.appointmentTitle|text }}</td>
+                                <td class="text-right">
+                                    <a class="btn btn-sm btn-primary"
+                                       href="{{ doc_landing_url|attr }}?pid={{ row.pid|text }}">
+                                        {{ "Open synthesis"|xlt }}
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                {{ "No appointments are scheduled for today. Seed demo patients with ops/local/setup.sh, or open a patient directly:"|xlt }}
+                <code>?pid=&lt;id&gt;</code>
+            </div>
+        {% endif %}
+        </section>
+    {% elseif not found %}
+        {{ _self.section_divider() }}
+        <section class="ccp-section">
+        <div class="alert alert-danger mb-0">
+            {% if invalid_pid %}
+                {{ "That patient was not found in this site."|xlt }}
+            {% else %}
+                {{ "Patient not found, or you do not have access to this patient's chart."|xlt }}
+            {% endif %}
+            <a class="alert-link ml-2" href="{{ doc_landing_url|attr }}">{{ "Back to today's schedule"|xlt }}</a>
+        </div>
+        {% if scheduled_patients is not empty %}
+            {{ _self.section_divider() }}
+            <div class="card mb-0">
+                <div class="card-header"><strong>{{ "Scheduled today"|xlt }}</strong></div>
+                <div class="card-body table-responsive p-0">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                        <tr>
+                            <th>{{ "Time"|xlt }}</th>
+                            <th>{{ "Patient"|xlt }}</th>
+                            <th>{{ "MRN"|xlt }}</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for row in scheduled_patients %}
+                            <tr>
+                                <td>{{ row.appointmentTime|text }}</td>
+                                <td>{{ row.displayName|text }}</td>
+                                <td>{{ row.pubpid|text }}</td>
+                                <td class="text-right">
+                                    <a class="btn btn-sm btn-primary"
+                                       href="{{ doc_landing_url|attr }}?pid={{ row.pid|text }}">
+                                        {{ "Open synthesis"|xlt }}
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+        </section>
+    {% else %}
+
+        {% if doc.capability_crash %}
+            {{ _self.section_divider() }}
+            <section class="ccp-section">
+            <div class="alert alert-danger mb-0">
+                <strong>{{ "Synthesis paused"|xlt }}:</strong> {{ doc.crash_banner|text }}.
+                {{ "Chart facts are from the capabilities that succeeded; no synthesis was computed over a partial fact set."|xlt }}
+            </div>
+            </section>
+        {% endif %}
+
+        {% if not doc.capability_crash %}
+            {{ _self.section_divider() }}
+            <section class="ccp-section ccp-section-status">
+            <div class="ccp-status-rail" id="ccpStatusRail">
+                <span class="badge badge-info ccp-badge-checked"
+                      id="ccpCitationsBadge"
+                      title="{{ doc.verdict_hover|attr }}">
+                    {{ "citations checked"|xlt }}
+                </span>
+                <span id="ccpNarrativeUnavailableWrap"{% if doc.verify_status != 'degraded' %} style="display:none;"{% endif %}>
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-warning" id="ccpNarrativeUnavailableBadge">{{ "narrative unavailable"|xlt }}</span>
+                </span>
+                {% if doc.regen_reason == 'verify_retry' %}
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-secondary">{{ "retried before serving"|xlt }}</span>
+                {% elseif doc.regen_reason == 'manual' %}
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-secondary">{{ "manually regenerated"|xlt }}</span>
+                {% elseif doc.regen_reason == 'qa_low' %}
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-secondary">{{ "auto-regenerated after low QA score"|xlt }}</span>
+                {% endif %}
+                {% if doc.served_from_cache %}
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-light">{{ "served from cache -- no model call this read"|xlt }}</span>
+                {% endif %}
+                {% if doc.qa_status and doc.qa_status != 'pending' %}
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-light" title="{{ "advisory second-pass QA review -- never a serving gate"|xla }}">
+                        {{ "QA"|xlt }}: {{ doc.qa_status|text }}{{ doc.qa_score is not null ? ' (' ~ doc.qa_score ~ ')' : '' }}
+                    </span>
+                {% elseif doc.qa_status == 'pending' %}
+                    {{ _self.status_pipe() }}
+                    <span class="badge badge-light">{{ "QA pending"|xlt }}</span>
+                {% endif %}
+                {{ _self.status_pipe() }}
+                <span class="ccp-meta-line">{{ "computed"|xlt }} <span id="ccpComputedAt">{{ doc.computed_at ? doc.computed_at|text : '—' }}</span></span>
+                {{ _self.status_pipe() }}
+                <span class="ccp-meta-line">{{ "correlation"|xlt }} <span id="ccpCorrelationId">{{ doc.correlation_id|text }}</span></span>
+            </div>
+            </section>
+
+            {% if doc.verify_status == 'degraded' and doc.degraded_message %}
+                {{ _self.section_divider() }}
+                <section class="ccp-section" id="ccpDegradedSection">
+                <div class="alert alert-warning mb-0" id="ccpDegradedAlert">
+                    <span id="ccpDegradedMessage">{{ doc.degraded_message|text }}</span>
+                    {% if not llm_configured %}
+                        <hr class="my-2">
+                        <small>
+                            {{ "No LLM credentials are configured. Add your Google AI Studio key to ops/local/gemini.local.env (see gemini.local.env.example), export CLINICAL_COPILOT_GEMINI_API_KEY, then recreate the openemr container and click Generate narrative."|xlt }}
+                        </small>
+                    {% endif %}
+                </div>
+                </section>
+            {% else %}
+                <section class="ccp-section" id="ccpDegradedSection" style="display:none;">
+                <div class="alert alert-warning mb-0" id="ccpDegradedAlert">
+                    <span id="ccpDegradedMessage"></span>
+                </div>
+                </section>
+            {% endif %}
+        {% endif %}
+
+        {{ _self.section_divider() }}
+        <section class="ccp-section">
+        <div class="row ccp-main-layout">
+            <div class="col-lg-8 ccp-primary-column">
+                {% if not doc.capability_crash %}
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                        <strong>{{ "Priority Narrative"|xlt }}</strong>
+                        {{ _self.narrative_action_form(doc_url, needs_narrative_generation) }}
+                    </div>
+                    <div class="card-body" id="ccpNarrativeBody">
+                        <div id="ccpNarrativeStatus" class="text-muted small mb-2" style="display:none;"></div>
+                        <div id="ccpNarrativeContent">
+                        {% if view_model.narrative is not empty %}
+                            {% for claim in view_model.narrative %}
+                                <div class="ccp-narrative-claim">
+                                    {% if 'conflict' in claim.flags %}<span class="badge badge-warning">{{ "Conflict"|xlt }}</span>{% endif %}
+                                    {{ claim.text|text }}
+                                    {{ _self.citation_refs(claim.citations) }}
+                                    {% if visit_label %}
+                                        <span class="ccp-pipe" aria-hidden="true">|</span>
+                                        <span class="text-muted small">{{ visit_label|text }}</span>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted mb-0">{{ "No narrative yet. Use Generate narrative to run the model over the chart facts."|xlt }}</p>
+                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ccp-section-chat">
+                {% include 'oe-module-clinical-copilot/chat_panel.html.twig' with {
+                    'pid': pid,
+                    'chat_url': chat_url,
+                    'status_url': status_url,
+                } %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-lg-4 ccp-facts-column">
+                <div class="card mb-0">
+                    <div class="card-header">
+                        <strong>{{ "Chart Facts"|xlt }}</strong>
+                        <small class="text-muted d-block">{{ "always shown beside the narrative"|xlt }}</small>
+                    </div>
+                    <div class="card-body">
+                        {% if view_model.in_flight is not empty %}
+                            <div class="ccp-facts-group-title">{{ "In flight"|xlt }}</div>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-borderless mb-0">
+                                    {{ _self.facts_table(visit_label) }}
+                                    <tbody>
+                                    {% for fact in view_model.in_flight %}{{ _self.fact_row(fact, visit_label) }}{% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+
+                        {% for capability, facts in view_model.facts_by_capability %}
+                            <div class="ccp-facts-group-title">{{ facts|first.capability_label|default(capability)|text }}</div>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-borderless mb-0">
+                                    {{ _self.facts_table(visit_label) }}
+                                    <tbody>
+                                    {% for fact in facts %}{{ _self.fact_row(fact, visit_label) }}{% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endfor %}
+
+                        {% if view_model.exclusions is not empty %}
+                            <div class="ccp-facts-group-title">{{ "Excluded"|xlt }}</div>
+                            <div class="table-responsive mb-0">
+                                <table class="table table-sm table-borderless mb-0">
+                                    {{ _self.facts_table(visit_label) }}
+                                    <tbody>
+                                    {% for fact in view_model.exclusions %}{{ _self.fact_row(fact, visit_label) }}{% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+
+                        {% if view_model.in_flight is empty and view_model.facts_by_capability is empty and view_model.exclusions is empty %}
+                            <p class="text-muted mb-0">{{ "No facts extracted."|xlt }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        </section>
+
+        {{ _self.section_divider() }}
+        <section class="ccp-section">
+        <div class="card mb-0">
+            <div class="card-header">
+                <a data-toggle="collapse" href="#ccpHistory" role="button" aria-expanded="false">
+                    <strong>{{ "History"|xlt }}</strong> <small class="text-muted">{{ "every attempt ever computed for this patient, most recent first"|xlt }}</small>
+                </a>
+            </div>
+            <div class="collapse" id="ccpHistory">
+                <div class="card-body table-responsive">
+                    <table class="table table-sm ccp-history-table">
+                        <thead><tr>
+                            <th>{{ "Computed"|xlt }}</th><th>{{ "Digest"|xlt }}</th><th>{{ "Verify"|xlt }}</th>
+                            <th>{{ "Regen reason"|xlt }}</th><th>{{ "QA"|xlt }}</th><th>{{ "Correlation"|xlt }}</th>
+                        </tr></thead>
+                        <tbody>
+                        {% for row in history_rows %}
+                            <tr>
+                                <td>{{ row.computed_at|text }}</td>
+                                <td><code>{{ row.fact_digest|text }}&hellip;</code></td>
+                                <td>{{ row.verify_status|text }}</td>
+                                <td>{{ row.regen_reason|text }}</td>
+                                <td>{{ row.qa_status|text }}{{ row.qa_score is not null ? ' (' ~ row.qa_score ~ ')' : '' }}</td>
+                                <td><small>{{ row.correlation_id|text }}</small></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="6" class="text-muted">{{ "No prior attempts."|xlt }}</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </section>
+    {% endif %}
+</div>
+{% if show_patient_chart_nav %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if show_patient_chart_nav and patient_nav_list_id %}
+<script>
+    $(function () {
+        $('#' + {{ patient_nav_list_id|js_escape() }}).addClass('active');
+    });
+</script>
+{% endif %}
+{% if found and not landing and not doc.capability_crash %}
+<script>
+(function () {
+    'use strict';
+
+    var btn = document.getElementById('ccpNarrativeBtn');
+    var body = document.getElementById('ccpNarrativeContent');
+    var statusLine = document.getElementById('ccpNarrativeStatus');
+    var docUrl = document.getElementById('ccpDocUrl');
+    var statusUrl = document.getElementById('ccpStatusUrl');
+    var csrfInput = document.getElementById('ccpDocCsrf');
+    if (!btn || !body || !docUrl || !csrfInput || !statusUrl) {
+        return;
+    }
+
+    var visitLabel = {{ (visit_label ?? '')|json_encode|raw }};
+    var emptyMessage = {{ "No narrative yet. Use Generate narrative to run the model over the chart facts."|xlt|json_encode|raw }};
+    var generatingLabel = {{ "Generating…"|xlt|json_encode|raw }};
+    var generateLabel = {{ "Generate narrative"|xlt|json_encode|raw }};
+    var regenerateLabel = {{ "Regenerate"|xlt|json_encode|raw }};
+
+    function escapeText(text) {
+        return text == null ? '' : String(text);
+    }
+
+    function appendCitation(parent, citation) {
+        if (citation.url) {
+            var link = document.createElement('a');
+            link.href = citation.url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.className = 'ccp-citation';
+            link.title = citation.label || '';
+            link.textContent = '[' + (citation.label || '') + ']';
+            parent.appendChild(link);
+            return;
+        }
+        var span = document.createElement('span');
+        span.className = 'ccp-citation ccp-citation-tooltip';
+        span.title = citation.label || '';
+        span.textContent = '[' + (citation.label || '') + ']';
+        parent.appendChild(span);
+    }
+
+    function renderNarrative(claims, doc) {
+        body.textContent = '';
+        if (statusLine) {
+            statusLine.style.display = 'none';
+            statusLine.textContent = '';
+        }
+
+        if (doc && doc.computed_at) {
+            if (statusLine) {
+                statusLine.style.display = '';
+                var statusParts = ['updated ' + doc.computed_at];
+                if (doc.verify_status) {
+                    statusParts.push('verify: ' + doc.verify_status);
+                }
+                if (doc.degraded_reason) {
+                    statusParts.push(doc.degraded_reason);
+                }
+                if (doc.correlation_id) {
+                    statusParts.push('correlation ' + doc.correlation_id);
+                }
+                statusLine.textContent = statusParts.join(' | ');
+            }
+        }
+
+        if (Array.isArray(claims) && claims.length > 0) {
+            claims.forEach(function (claim) {
+                var row = document.createElement('div');
+                row.className = 'ccp-narrative-claim';
+                if (Array.isArray(claim.flags) && claim.flags.indexOf('conflict') !== -1) {
+                    var badge = document.createElement('span');
+                    badge.className = 'badge badge-warning';
+                    badge.textContent = 'Conflict';
+                    row.appendChild(badge);
+                    row.appendChild(document.createTextNode(' '));
+                }
+                row.appendChild(document.createTextNode(escapeText(claim.text) + ' '));
+                if (Array.isArray(claim.citations)) {
+                    claim.citations.forEach(function (citation) {
+                        appendCitation(row, citation);
+                    });
+                }
+                if (visitLabel) {
+                    var pipe = document.createElement('span');
+                    pipe.className = 'ccp-pipe';
+                    pipe.setAttribute('aria-hidden', 'true');
+                    pipe.textContent = '|';
+                    row.appendChild(pipe);
+                    var visit = document.createElement('span');
+                    visit.className = 'text-muted small';
+                    visit.textContent = ' ' + visitLabel;
+                    row.appendChild(visit);
+                }
+                body.appendChild(row);
+            });
+            return;
+        }
+
+        if (doc && doc.verify_status === 'degraded' && doc.degraded_message) {
+            var degraded = document.createElement('p');
+            degraded.className = 'text-muted mb-0';
+            degraded.textContent = doc.degraded_message;
+            body.appendChild(degraded);
+            return;
+        }
+
+        var empty = document.createElement('p');
+        empty.className = 'text-muted mb-0';
+        empty.textContent = emptyMessage;
+        body.appendChild(empty);
+    }
+
+    function parseJsonResponse(response) {
+        return response.text().then(function (text) {
+            try {
+                return JSON.parse(text);
+            } catch (err) {
+                throw new Error('server returned a non-JSON response -- try refreshing the page and signing in again');
+            }
+        }).then(function (data) {
+            if (!response.ok || data.ok === false) {
+                throw new Error(data.reason || 'regenerate failed');
+            }
+            return data;
+        });
+    }
+
+    function setDegraded(doc) {
+        var section = document.getElementById('ccpDegradedSection');
+        var message = document.getElementById('ccpDegradedMessage');
+        var badgeWrap = document.getElementById('ccpNarrativeUnavailableWrap');
+        var citationsBadge = document.getElementById('ccpCitationsBadge');
+        if (citationsBadge && doc.verdict_hover) {
+            citationsBadge.title = doc.verdict_hover;
+        }
+        if (doc.verify_status === 'degraded' && doc.degraded_message) {
+            if (section) {
+                section.style.display = '';
+            }
+            if (message) {
+                message.textContent = doc.degraded_message;
+            }
+            if (badgeWrap) {
+                badgeWrap.style.display = '';
+            }
+        } else {
+            if (section) {
+                section.style.display = 'none';
+            }
+            if (badgeWrap) {
+                badgeWrap.style.display = 'none';
+            }
+        }
+        var computedAt = document.getElementById('ccpComputedAt');
+        var correlationId = document.getElementById('ccpCorrelationId');
+        if (computedAt) {
+            computedAt.textContent = doc.computed_at || '—';
+        }
+        if (correlationId) {
+            correlationId.textContent = doc.correlation_id || '';
+        }
+    }
+
+    function setButtonState(needsGeneration, busy) {
+        var icon = document.getElementById('ccpNarrativeBtnIcon');
+        var label = document.getElementById('ccpNarrativeBtnLabel');
+        btn.disabled = !!busy;
+        btn.classList.toggle('btn-primary', !!needsGeneration && !busy);
+        btn.classList.toggle('btn-secondary', !needsGeneration || !!busy);
+        if (icon) {
+            icon.className = 'fa mr-1 ' + (needsGeneration ? 'fa-magic' : 'fa-refresh');
+        }
+        if (label) {
+            label.textContent = busy ? generatingLabel : (needsGeneration ? generateLabel : regenerateLabel);
+        }
+        btn.setAttribute('data-needs-generation', needsGeneration ? '1' : '0');
+    }
+
+    function applyRegenerateResult(data) {
+        var doc = data.doc || {};
+        renderNarrative((data.view_model && data.view_model.narrative) || [], doc);
+        setDegraded(doc);
+        setButtonState(!!data.needs_narrative_generation, false);
+        document.dispatchEvent(new CustomEvent('ccp-summary-regenerated', {
+            detail: { doc: doc },
+        }));
+    }
+
+    function parseSseStream(response, onStatusMessage) {
+        if (!response.body || !response.body.getReader) {
+            return response.text().then(function (text) {
+                throw new Error('streaming is not supported in this browser');
+            });
+        }
+
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        var correlationId = null;
+
+        function handleEventBlock(block) {
+            var lines = block.split('\n');
+            var eventName = 'message';
+            var dataLines = [];
+            lines.forEach(function (line) {
+                if (line.indexOf('event:') === 0) {
+                    eventName = line.slice(6).trim();
+                } else if (line.indexOf('data:') === 0) {
+                    dataLines.push(line.slice(5).trim());
+                }
+            });
+            if (dataLines.length === 0) {
+                return null;
+            }
+            var payload;
+            try {
+                payload = JSON.parse(dataLines.join('\n'));
+            } catch (err) {
+                return null;
+            }
+            if (eventName === 'status' && payload.message) {
+                if (payload.message.indexOf('correlation_id:') === 0) {
+                    correlationId = payload.message.slice('correlation_id:'.length);
+                }
+                if (onStatusMessage) {
+                    onStatusMessage(payload.message);
+                }
+                return null;
+            }
+            if (eventName === 'done') {
+                return { done: payload, correlationId: correlationId };
+            }
+            return null;
+        }
+
+        function readChunk() {
+            return reader.read().then(function (chunk) {
+                if (chunk.done) {
+                    return null;
+                }
+                buffer += decoder.decode(chunk.value, { stream: true });
+                var parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+                for (var i = 0; i < parts.length; i++) {
+                    var result = handleEventBlock(parts[i]);
+                    if (result) {
+                        return result;
+                    }
+                }
+                return readChunk();
+            });
+        }
+
+        return readChunk().then(function (result) {
+            if (result && result.done) {
+                return result;
+            }
+            if (buffer.trim() !== '') {
+                var trailing = handleEventBlock(buffer);
+                if (trailing) {
+                    return trailing;
+                }
+            }
+            return result;
+        });
+    }
+
+    function pollRegenerateStatus(correlationId) {
+        var url = statusUrl.value + (statusUrl.value.indexOf('?') === -1 ? '?' : '&') + 'cid=' + encodeURIComponent(correlationId);
+        return fetch(url, { credentials: 'same-origin' })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (!data.ok) {
+                    throw new Error(data.reason || 'status poll failed');
+                }
+                if (data.done && data.result) {
+                    return data.result;
+                }
+                return new Promise(function (resolve, reject) {
+                    setTimeout(function () {
+                        pollRegenerateStatus(correlationId).then(resolve).catch(reject);
+                    }, 1500);
+                });
+            });
+    }
+
+    function regenerateWithStream() {
+        var form = new FormData();
+        form.append('action', 'regenerate');
+        form.append('stream', '1');
+        form.append('csrf_token_form', csrfInput.value);
+
+        var correlationId = null;
+
+        return fetch(docUrl.value, {
+            method: 'POST',
+            body: form,
+            credentials: 'same-origin',
+            headers: { Accept: 'text/event-stream' },
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    return parseJsonResponse(response);
+                }
+                return parseSseStream(response, function (message) {
+                    if (message.indexOf('correlation_id:') === 0) {
+                        correlationId = message.slice('correlation_id:'.length);
+                        return;
+                    }
+                    if (statusLine) {
+                        statusLine.style.display = '';
+                        statusLine.textContent = message;
+                    }
+                }).then(function (streamResult) {
+                    if (streamResult && streamResult.done) {
+                        if (streamResult.done.ok === false) {
+                            throw new Error(streamResult.done.reason || 'regenerate failed');
+                        }
+                        return streamResult.done;
+                    }
+                    if (!correlationId && streamResult && streamResult.correlationId) {
+                        correlationId = streamResult.correlationId;
+                    }
+                    if (!correlationId) {
+                        throw new Error('lost connection before regenerate finished');
+                    }
+                    return pollRegenerateStatus(correlationId);
+                });
+            });
+    }
+
+    btn.addEventListener('click', function () {
+        if (btn.disabled) {
+            return;
+        }
+        var needsGeneration = btn.getAttribute('data-needs-generation') === '1';
+        setButtonState(needsGeneration, true);
+        if (statusLine) {
+            statusLine.style.display = '';
+            statusLine.textContent = generatingLabel;
+        }
+
+        regenerateWithStream()
+            .then(function (data) {
+                applyRegenerateResult(data);
+            })
+            .catch(function (error) {
+                setButtonState(needsGeneration, false);
+                var section = document.getElementById('ccpDegradedSection');
+                var message = document.getElementById('ccpDegradedMessage');
+                if (section && message) {
+                    section.style.display = '';
+                    message.textContent = error && error.message ? error.message : 'regenerate failed';
+                }
+            });
+    });
+})();
+</script>
+{% endif %}
+</body>
+</html>

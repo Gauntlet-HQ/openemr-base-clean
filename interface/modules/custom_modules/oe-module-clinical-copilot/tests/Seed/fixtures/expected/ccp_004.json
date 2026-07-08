@@ -1,0 +1,140 @@
+{
+    "pubpid": "CCP-004",
+    "pid": 4,
+    "label": "IFCC A1c conversion + unrecognized status + preliminary result + outside/in-house med union",
+    "facts": [
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 4,
+            "clinical_date": "2026-06-17",
+            "date_source": "collected",
+            "value": {
+                "raw": "58",
+                "parsed": 7.5,
+                "comparator": "none",
+                "unit_original": "mmol/mol",
+                "unit_canonical": "%",
+                "conversion_version": "v1"
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 15,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "IFCC mmol/mol A1c converted to NGSP % via mod_copilot_cadence code_set=unit_conversion v1 (ngsp_percent = (ifcc_mmol_mol / 10.929) + 2.15); 58 mmol/mol -> 7.5%. Both original and canonical values + conversion_version must be carried."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "exclusion",
+            "pid": 4,
+            "clinical_date": "2026-05-28",
+            "date_source": "collected",
+            "value": {
+                "raw": "135",
+                "parsed": 135.0,
+                "comparator": "none",
+                "unit_original": "mg/dL",
+                "unit_canonical": "mg/dL",
+                "conversion_version": null
+            },
+            "status": "excluded",
+            "flags": [
+                "excluded_reason:unrecognized_status"
+            ],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 16,
+                    "field": "result_status",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "result_status='amended' is not in the recognized C2 set (final/corrected/''/preliminary/cannot be done/incomplete/error/pending/canceled) -> excluded and flagged, never guessed; does not reset the overdue clock."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "pending_results",
+            "capability_version": "1",
+            "kind": "preliminary_result",
+            "pid": 4,
+            "clinical_date": "2026-07-04",
+            "date_source": "collected",
+            "value": {
+                "raw": "8.2",
+                "parsed": 8.2,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "preliminary",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 17,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Preliminary result: rendered in the in-flight section labeled (\"preliminary A1c 8.2 - final pending\"), never a trend point, does not reset the overdue clock."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "med_response",
+            "capability_version": "1",
+            "kind": "med_event",
+            "pid": 4,
+            "clinical_date": "2026-01-07",
+            "date_source": "collected",
+            "value": null,
+            "status": "unstated",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "lists",
+                    "pk": 1,
+                    "field": "title",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Outside/reconciled med in `lists` (type=medication); T4 union member 1 of 2."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "med_response",
+            "capability_version": "1",
+            "kind": "med_event",
+            "pid": 4,
+            "clinical_date": "2026-01-07",
+            "date_source": "collected",
+            "value": null,
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "prescriptions",
+                    "pk": 3,
+                    "field": "drug",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "In-house Rx in `prescriptions`; T4 union member 2 of 2 -- MedResponse must present both via the host PrescriptionService union."
+        }
+    ]
+}

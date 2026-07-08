@@ -1,0 +1,151 @@
+{
+    "note": "Index of every seeded landmine: which patient/table/row(s) encode it and the expected downstream handling per ARCHITECTURE_COMPLETE.md C1-C4 and the Fact schema. Consumed by U4/U5 contract evals.",
+    "landmines": [
+        {
+            "landmine": "rising_a1c_trend",
+            "pubpid": "CCP-001",
+            "pid": 1,
+            "table": "procedure_result",
+            "pks": [
+                1,
+                2,
+                3,
+                4
+            ],
+            "expected_handling": "presented as ascending trend_point series, no exclusions"
+        },
+        {
+            "landmine": "med_dose_vs_response_mismatch",
+            "pubpid": "CCP-001",
+            "pid": 1,
+            "table": "prescriptions",
+            "pks": [
+                1,
+                2
+            ],
+            "expected_handling": "paired med_event + trend cited together; capability must not assert causation (I8)"
+        },
+        {
+            "landmine": "overdue_acr_no_pending_order",
+            "pubpid": "CCP-001",
+            "pid": 1,
+            "table": "procedure_result",
+            "pks": [
+                5
+            ],
+            "expected_handling": "overdue_item, reorder-suppression note absent (no active pending order)"
+        },
+        {
+            "landmine": "overdue_acr_with_pending_order_reorder_suppression",
+            "pubpid": "CCP-002",
+            "pid": 2,
+            "table": "procedure_order",
+            "pks": [
+                7
+            ],
+            "expected_handling": "overdue_item + pending_order both presented; reorder-suppression note IS shown (\"do not reorder\")"
+        },
+        {
+            "landmine": "drawn_but_unresulted_order",
+            "pubpid": "CCP-002",
+            "pid": 2,
+            "table": "procedure_order",
+            "pks": [
+                7
+            ],
+            "expected_handling": "pending_order fact; never counts as a result; never resets overdue clock"
+        },
+        {
+            "landmine": "late_arriving_lab",
+            "pubpid": "CCP-002",
+            "pid": 2,
+            "table": "procedure_result",
+            "pks": [
+                7
+            ],
+            "expected_handling": "clinical_date (collected) is older than other on-file results for this patient; digest must change on (re-)insertion (E1)"
+        },
+        {
+            "landmine": "corrected_lab_in_place",
+            "pubpid": "CCP-003",
+            "pid": 3,
+            "table": "procedure_result",
+            "pks": [
+                9
+            ],
+            "expected_handling": "status corrected, supersedes 1 prior result(s), single physical row"
+        },
+        {
+            "landmine": "corrected_lab_new_row",
+            "pubpid": "CCP-003",
+            "pid": 3,
+            "table": "procedure_result",
+            "pks": [
+                10,
+                11
+            ],
+            "expected_handling": "two rows, same result_code + clinical date; highest procedure_result_id wins (corrected), cites the superseded original"
+        },
+        {
+            "landmine": "censored_value_lt_7_0",
+            "pubpid": "CCP-003",
+            "pid": 3,
+            "table": "procedure_result",
+            "pks": [
+                12
+            ],
+            "expected_handling": "comparator=lt, parsed=7.0, flags=[censored], never an exact trend point"
+        },
+        {
+            "landmine": "unitless_value",
+            "pubpid": "CCP-003",
+            "pid": 3,
+            "table": "procedure_result",
+            "pks": [
+                13
+            ],
+            "expected_handling": "excluded (unit: unknown), visible exclusion fact, counted in unitless-exclusion-rate, no unit guessing"
+        },
+        {
+            "landmine": "ifcc_mmol_mol_a1c",
+            "pubpid": "CCP-004",
+            "pid": 4,
+            "table": "procedure_result",
+            "pks": [
+                15
+            ],
+            "expected_handling": "converted 58 mmol/mol -> 7.5% via unit_conversion v1; original+canonical+version all carried"
+        },
+        {
+            "landmine": "unrecognized_result_status",
+            "pubpid": "CCP-004",
+            "pid": 4,
+            "table": "procedure_result",
+            "pks": [
+                16
+            ],
+            "expected_handling": "result_status='amended' -> excluded + flagged (unrecognized), visible exclusion, no clock reset"
+        },
+        {
+            "landmine": "preliminary_result",
+            "pubpid": "CCP-004",
+            "pid": 4,
+            "table": "procedure_result",
+            "pks": [
+                17
+            ],
+            "expected_handling": "in-flight section, not a trend point, no clock reset"
+        },
+        {
+            "landmine": "outside_and_in_house_med_union",
+            "pubpid": "CCP-004",
+            "pid": 4,
+            "table": "lists,prescriptions",
+            "pks": [
+                1,
+                3
+            ],
+            "expected_handling": "both present via PrescriptionService union (T4); never asserted as duplicates or conflicts"
+        }
+    ]
+}

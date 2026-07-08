@@ -1,0 +1,76 @@
+meta {
+  name: 2 - Submit Turn
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/chat.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  action: turn
+  session_id: {{session_id}}
+  message: What was her most recent A1c and how does it compare to the visit before that?
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  Submits one turn and blocks until it finishes -- ARCHITECTURE.md §1.3:
+  "the request IS the turn", there is no async job to poll for
+  completion (only progress, via `status.php`, which double-duties off
+  the same trace spans this call is already writing). Requires
+  `session_id` from "1 - Start Session".
+
+  This reference collection uses the plain (non-streamed) response, the
+  same JSON `chat.php` returns either way; add `stream: 1` to the form
+  body to switch to SSE (`text/event-stream`) instead -- Bruno renders
+  the raw event stream rather than parsing it, so the plain form is more
+  useful for scripted assertions.
+
+  Example success response (shape, not exact clinical content):
+  ```json
+  {
+    "ok": true,
+    "session_id": 42,
+    "correlation_id": "0190f...-...-...-...-...",
+    "stale": false,
+    "frozen": false,
+    "verify_status": "passed",
+    "degraded_message": null,
+    "claims": [
+      { "text": "...", "claim_type": "lab_value", "citation_ids": ["..."], "numeric_values": [...], "flags": [], "order": 0, "emphasis": "normal" }
+    ],
+    "verdicts": [ { "check": "citation_resolution", "passed": true, "skipped": false, "findings": [] } ],
+    "tool_calls": [ { "tool": "LabHistory", "ok": true, "error": null } ],
+    "facts": [ { "fact_id": "...", "capability": "...", "kind": "..." } ]
+  }
+  ```
+
+  A tool failure surfaces as `tool_calls[].ok: false` with `.error` set
+  AND is narrated in `claims` (never silently absorbed -- ARCHITECTURE.md
+  §1.3/§6.2). `frozen: true` means a V3 sev-1 patient-identity trip locked
+  the session permanently; `verify_status: "degraded"` means facts-only,
+  no narrative (I6/I11).
+}
+
+script:post-response {
+  const data = res.getBody();
+  if (data && data.correlation_id) {
+    bru.setVar("correlation_id", data.correlation_id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("turn completed (or a named, non-crashing degradation)", function () {
+    const data = res.getBody();
+    expect(data.ok, data.reason || "").to.equal(true);
+    expect(data.correlation_id).to.be.a("string").and.not.empty;
+    expect(["passed", "degraded"]).to.include(data.verify_status);
+  });
+}
