@@ -1,6 +1,6 @@
 # Clinical Co-Pilot — Agent Integration Architecture
 
-**Status:** Nothing here is implemented yet; it is the roadmap for Early/Final Submissions per the Clinical Co-Pilot Project Requirements Document.
+Status: Nothing here is implemented yet; it is the roadmap for Early/Final Submissions per the Clinical Co-Pilot Project Requirements Document.
 
 ---
 
@@ -14,7 +14,7 @@ The reason that the sidecar has been chosen rather than an embedded appication i
 
 To that end, a Python + FastAPI service will be developed for this purpose.  Python was chosen since it is a well-established programming language that has robust libraries and documentation that can be used for this purpose.  FastAPI has been chosen for its compatibility with Python as well as its independence from network operations, which will provide relief from OpenEMR's latency issues, when the multi-turn strategy as discussed in `USERS.md` file employed.  The agent may need further information than what is displayed (UC-2) 
 
-OpenEMR's existing **REST/FHIR API** is called by the agent using a scoped OAuth2 token minted from the user's session.  The authorization is inherited from OpenEMR.  That is, OpenEMR provides the Access Control List to the agent, and therefore dictates permissions to the agent.  The reason for this is that the Physician Assistant has extremely limited access to patient information: he or she cannot read patient information unless that patient is in his or her queue.  
+OpenEMR's existing REST/FHIR API is called by the agent using a scoped OAuth2 token minted from the user's session.  The authorization is inherited from OpenEMR.  That is, OpenEMR provides the Access Control List to the agent, and therefore dictates permissions to the agent.  The reason for this is that the Physician Assistant has extremely limited access to patient information: he or she cannot read patient information unless that patient is in his or her queue.  
 
 Verification has two aspects.  The first occurs via source attribution.  That is, if the agent cannot find a record to source a claim, the claim cannot be stated.  An example for this is missing bloodwork; the agent will not claim the knowledge of bloodwork that does not exist on file for the patient.  Further, the second aspect must check information like dosage thresholds in order to keep the agent from inventing information.  
 
@@ -44,7 +44,7 @@ Among the issues that need to be addressed when implementing the agent are the f
 | Option | Pros | Cons | Verdict |
 |--------|------|------|---------|
 | Embed in OpenEMR PHP (like current `src/Services/AI`) | No new service; reuses auth/session | Inherits `globals.php` bootstrap, session write-lock (P-2), no streaming, weak eval/observability tooling in PHP | Rejected as the agent home |
-| **Separate FastAPI agent service** | Escapes PHP lifecycle; streaming; Python agent/eval/observability ecosystem; independent scaling | New service to secure + deploy; cross-service auth | **Chosen** |
+| Separate FastAPI agent service | Escapes PHP lifecycle; streaming; Python agent/eval/observability ecosystem; independent scaling | New service to secure + deploy; cross-service auth | Chosen |
 
 The existing PHP `PatientHistorySummaryService` is kept only as a thin, optional fallback in the event that the AI Agent is not available, which is a strong possibility in the even that access to the service providing the AI agent is unavailable.  
 
@@ -74,7 +74,7 @@ Tool failures return a typed error the agent surfaces transparently ("couldn't r
 Runs before any response reaches the user.  This is streamlined by the use of the sidecar as documented above.  
 
 1. Source attribution — the agent must attach, to each clinical claim, the tool result / record ID it came from. Claims with no source are dropped or downgraded to "not found in record." The model only ever sees data returned by tools (retrieval grounding), so it cannot cite what it never received.  A condition will be enforced that the agent will inform the user when a record is not received.  
-2. Domain-constraint enforcement using Railway — `check_drug_constraints` and similar deterministic checks run against structured data; a response asserting safety that the constraints contradict is **blocked/flagged** (UC-3). 
+2. Domain-constraint enforcement using Railway — `check_drug_constraints` and similar deterministic checks run against structured data; a response asserting safety that the constraints contradict is blocked/flagged (UC-3). 
 3. Structured outputs — schemas constrain the model's shape, reducing free-text fabrication.
 
 ## 6. Compliance & PHI handling (maps to AUDIT §6)
@@ -107,11 +107,11 @@ Test boundaries, invariants, regressions — never happy-path only. Each case do
 - Boundary: new patient / empty record → "no history on file," never fabricated (UC-1).
 - Boundary: ambiguous query → asks to clarify, doesn't guess (UC-2).
 - Invariant: every clinical claim cites a source (UC-1/3/4).
-- Invariant/adversarial:** request for a non-panel patient or a prompt-injection exfiltration attempt → refused + logged, nothing leaked (UC-5).
+- Invariant/adversarial: request for a non-panel patient or a prompt-injection exfiltration attempt → refused + logged, nothing leaked (UC-5).
 - Domain: dangerous interaction/over-threshold dose → flagged, not affirmed (UC-3).
 - Regression: cached context stale after new lab → cache invalidation returns fresh data.
 
-Because the sample data is synthetic and clean (`AUDIT.md` §5), the eval set injects dirty-data conditions (missing fields, stale/duplicate records) that real charts have.
+Because the sample data is synthetic and clean, the eval set injects dirty-data conditions (missing fields, stale/duplicate records) that real charts have.
 
 ## 10. Failure modes & graceful degradation
 
