@@ -6,6 +6,8 @@ The scope of this document is to audit the OpenEMR application to accommodate th
 
 This audit was performed using the Opus 4.3 agent in the CursorAI IDE.  No remediation has been completed, but will be documented with functional versions of the agent.  
 
+> **Revision (2026-07-09).** This revision reconciles the audit with the current state of the repository. Since the previous revision the codebase has grown two AI capabilities beyond the original patient-history summary: (a) an **AI observability ledger** (`src/Services/AI/Observability/*`, `bin/ai-observability-report.php`, `OBSERVABILITY.md`) that records per-transaction step timings, token counts, estimated cost, and success/failure — and **deliberately stores no patient identifiers or clinical content**; and (b) an **AI differential-diagnosis feature** (`src/Services/AI/DiagnosisSuggestionService.php`), a second service that transmits clinical PHI to OpenAI. The diagnosis service is **service-layer only — it has no REST route or UI entry point yet**, so it is not user-reachable, but it inherits every AI-path finding below. The observability ledger adds operational monitoring (partially addressing the "no metrics" performance gap) but is **not** a PHI-disclosure audit trail and therefore does not close S-2 / C-1.
+
 ---
 
 ## Table of Contents
@@ -36,11 +38,11 @@ The full risk register at the end ranks every finding by severity and will need 
 
 **Bottom Line Up Front:**  The OpenEMR requires a series of remediations that have been documented in this audit in order to operate as a functional environment for the AI agent to be introduced.  A risk register was generated and will be incorporated into development plans going forward.
 
-Security & compliance (highest priority). Currently, the AI path that transmits PHI (intake notes and patient records), does so to OpenAI with no programmatic BAA/zero-retention gate.  This is noted in S-1/C-5.  Per the comment there is no audit entry so PHI disclosures are invisible to the audit trail, which means that HIPAA standards for accountability cannot be met.  Other issues detected by the audit include a least-privilege violation, and there is no real encryption for patient data at the application layer.  All of these issues will need to be remediated before any interfaces can be developed and employed.  
+Security & compliance (highest priority). Currently, the AI paths that transmit PHI to OpenAI do so with no programmatic BAA/zero-retention gate. There are now **two such paths** — the patient-history summary and the newer differential-diagnosis service (S-1/C-5). Both minimize identifiers (name/DOB excluded) but still send clinical facts tied to a retrievable record. Per the code comments there is no audit entry, so PHI disclosures are invisible to the audit trail, which means that HIPAA standards for accountability cannot be met. The new observability ledger records operational metrics only (no identifiers, no clinical content) and does **not** satisfy this disclosure-accounting duty. Other issues detected by the audit include a least-privilege violation, and there is no real encryption for patient data at the application layer.  All of these issues will need to be remediated before any interfaces can be developed and employed.  
 
 Performance & latency. There are several system calls that will cause serious latency issues with the system. (P-1, Critical for UX, P-2, P-4, P-5 and P-6). Data calls are either passed through multiple processes or subject to write-locks and will cause latencies of up to 30 seconds, which will violate the medical professional's need to have all information at hand in under 90 seconds for review and employment.
 
-Architecture. New capabilities feature a sidecar-type application that will require a REST API.  Additionally, Railway will be employed for cloud deployment.  
+Architecture. New capabilities feature a sidecar-type application that will require a REST API.  Additionally, Railway will be employed for cloud deployment (a `railway/entrypoint.sh` and deployment image are now present). The AI feature set has expanded into a small `src/Services/AI/` package (two summary/diagnosis services, an OpenAI client behind `OpenAiChatClientInterface`, and an `Observability/` sub-package); the diagnosis service is not yet wired to an endpoint.  
 
 Data quality. The sample dataset is internally clean and referentially intact (no duplicates, no orphan records, valid formats), but has systematic gaps that are direct agent failure modes: SSN and primary-provider are 100% empty, `sex` is binary-only, and phone/email formats are unrealistically uniform. This list was synthesized by the developer and will need improvement before further testing.  
 
@@ -78,6 +80,8 @@ Finding S-3 (High) — AI feature under-scoped. The AI summary reads clinical hi
 
 The UI endpoint has the same mismatch (`interface/patient_file/summary/ai_history_summary.php:31`), while e.g. the allergy endpoint requires `patients/med` (`_rest_routes_standard.inc.php:272-274`). A demographics-only user can trigger AI summarization of medical history — a minimum-necessary / least-privilege violation.
 
+> The newer `DiagnosisSuggestionService` reads the same class of medical data (current visit, active medications, problem list) but has **no REST route or UI hook yet**, so no ACL currently guards it. When it is wired to an endpoint it must be authorized at `patients/med` (or a dedicated ACO) rather than repeating the `patients/demo` mistake above.
+
 ### 2.3 Data exposure vectors
 
 | Finding | Severity | Evidence |
@@ -94,19 +98,19 @@ The UI endpoint has the same mismatch (`interface/patient_file/summary/ai_histor
 
 | Finding | Severity | Evidence |
 |---------|----------|----------|
-| S-1 AI feature transmits clinical PHI to OpenAI with no programmatic BAA gate (warnings are code comments only), no data-retention control, no runtime enable/disable | Critical | `src/Services/AI/PatientHistorySummaryService.php:83-86`; `src/Services/AI/OpenAiChatClient.php:10-12,52-60`; `.env.example:8` |
-| S-2 No audit-trail entry for AI PHI disclosure — no `EventAuditLogger` calls anywhere in the AI service/controller/UI | High | `src/Services/AI/*`, `ai_history_summary.php` (absence) |
+| S-1 AI features transmit clinical PHI to OpenAI with no programmatic BAA gate (warnings are code comments only), no data-retention control, no runtime enable/disable — now on **two** paths (history summary + diagnosis suggestions) | Critical | `src/Services/AI/PatientHistorySummaryService.php:105-110`; `src/Services/AI/DiagnosisSuggestionService.php:106-111`; `src/Services/AI/OpenAiChatClient.php:10-12,65-76`; `.env.example` |
+| S-2 No audit-trail entry for AI PHI disclosure — no `EventAuditLogger` calls anywhere in the AI services/controller/UI. The observability ledger records ops metrics only (no user, no patient id, no data categories) and is explicitly identifier-free, so it does **not** fill this gap | High | `src/Services/AI/*`, `src/Services/AI/Observability/MarkdownObservabilityRecorder.php:13,173-175`, `ai_history_summary.php` (absence) |
 | S-6 `patient_data` / clinical tables not encrypted at the application layer — `database_encryption` global exists but `CryptoGen` only covers code paths that call `encryptForDatabase` (not patient demographics) | Medium | `src/Common/Crypto/CryptoGen.php:65-67`; `library/globals.inc.php:1028-1032` |
 | Encryption in transit to OpenAI is HTTPS (positive); OAuth/API cookies use `Secure=true` | Low (+) | `OpenAiConfig.php:27,57-59` |
 | Audit logging exists and defaults on, but is configurable/disable-able and does not cover AI events | Low–Medium | `src/Common/Logging/EventAuditLogger.php:672-694`; `library/globals.inc.php:2778-2789` |
-| Minimum-necessary: AI prompt deliberately excludes name/DOB but sends broad clinical context (encounter reason, social history, all active problems) | Medium | `PatientHistorySummaryService.php:12-13,98-155` |
+| Minimum-necessary: AI prompts deliberately exclude name/DOB but send broad clinical context (encounter reason, social history, all active problems/medications). Applies to both AI services | Medium | `PatientHistorySummaryService.php:12-13,132-190`; `DiagnosisSuggestionService.php:17-19,184-214` |
 | No AI-specific data-retention/deletion — OpenAI-side copies governed entirely by provider policy | High | (absence of retention code) |
 
 ### 2.5 Security recommendations (not implemented)
 
-1. Gate the AI feature behind a runtime config flag; require a confirmed OpenAI BAA + zero-retention before enabling in production.
-2. Raise AI authorization to `patients/med` (or a dedicated ACO) on both UI and REST paths.
-3. Add `EventAuditLogger` entries for every AI summary request (user, patient UUID/pid, timestamp, data categories sent).
+1. Gate both AI services (history summary + diagnosis suggestions) behind a shared runtime config flag; require a confirmed OpenAI BAA + zero-retention before enabling in production. Ideally enforce this once in `OpenAiChatClient`/`OpenAiConfig` so no service can bypass it.
+2. Raise AI authorization to `patients/med` (or a dedicated ACO) on the existing UI and REST paths, and apply the same before exposing the diagnosis service through any endpoint.
+3. Add `EventAuditLogger` entries for every AI request (user, patient UUID/pid, timestamp, data categories sent). The observability ledger is not a substitute — it is identifier-free by design.
 4. Stop returning `$e->getMessage()` in API error responses (`dispatch.php`, `ExceptionHandlerListener.php`).
 5. Set `cookie_secure` for core sessions in HTTPS deployments; add root web-server deny rules for `.env`/`vendor/`.
 6. Document DB-level (TDE) encryption as a HIPAA at-rest requirement for `patient_data`.
@@ -147,6 +151,8 @@ P-6 (High at scale): external-ID lookups on `patient_data.pubpid` (the column th
 | `SocialHistoryService::getHistoryData()` defaults to `SELECT *` on a wide (~30 longtext col) table; AI uses only 4 fields | Medium | `SocialHistoryService.php:43-57` |
 | `BaseService` query-in-loop (`splitAndProcessMultipleFields`, per-code `addCoding`) | Medium | `BaseService.php:587-589,559-564` |
 
+> The new `DiagnosisSuggestionService` reuses the same `getMostRecentEncounterForPatient()` (heavy join for a single row) and unbounded `getActiveIssues()` calls, so it inherits P-7 and the LIMIT-1-via-full-`search()` cost. Each AI call also now appends one row to `OBSERVABILITY.md` under `LOCK_EX`; the write is best-effort and swallows I/O errors so it cannot break the request, but it is a small additional per-call filesystem operation (and a potential contention point if the ledger were ever placed on shared/slow storage).
+
 ### 3.3 Bottlenecks & infrastructure
 
 | Area | Finding | Severity | Evidence |
@@ -186,6 +192,8 @@ Hard latency floors an integrated AI agent must design around:
 7. No async/queue/worker — the caller must block for the whole PHP request lifecycle; there is no job-id + poll pattern.
 
 Practical expectation: ≥1 s best case (new patient / no OpenAI call), typically 2–15 s when the model is invoked, 30 s worst-case timeout.
+
+> **New (positive): the AI paths are now instrumented.** Each call is wrapped in an `AiObservability` transaction that measures every step (`fetch_recent_encounter`, `fetch_social_history`, `fetch_active_issues`, `openai_chat`) with a monotonic timer and records token counts and estimated cost to `OBSERVABILITY.md`; `bin/ai-observability-report.php` aggregates failure rate, average latency, and spend. This gives real per-step latency data to target the fixes below — but it is measurement only and does not change the synchronous, uncached, blocking call path. The differential-diagnosis service uses the same transaction pattern (`diagnosis_suggestion`), so both AI paths share these latency floors.
 
 ### 3.5 Performance recommendations (not implemented)
 
@@ -251,11 +259,18 @@ The Docker `development-easy` stack additionally runs Mailpit (dev SMTP capture)
 
 ### 4.5 The AI feature as a reference integration
 
-End-to-end: `.env` (`OPENAI_API_KEY`, optional `OPENAI_MODEL`) → `OpenAiConfig` → `OpenAiChatClient` (HTTP via `oeHttp`) ← `PatientHistorySummaryService` (reuses `EncounterService`, `SocialHistoryService`, `PatientIssuesService`; returns `PatientHistorySummaryResult`). Two entry points share the same service:
+The AI code now forms a small package under `src/Services/AI/`:
+- `OpenAiConfig` (env-driven) → `OpenAiChatClient` (HTTP via `oeHttp`), behind `OpenAiChatClientInterface`; `chatWithUsage()` returns an `OpenAiChatResult` (content + model + `TokenUsage`), with `chat()` a thin text-only wrapper.
+- `PatientHistorySummaryService` (reuses `EncounterService`, `SocialHistoryService`, `PatientIssuesService`; returns `PatientHistorySummaryResult`).
+- `DiagnosisSuggestionService` (reuses `EncounterService` + `PatientIssuesService`, partitions active `lists` rows into medications vs. conditions; returns `DiagnosisSuggestionResult`; depends on narrow `RecentEncounterProviderInterface` / `ActivePatientIssuesProviderInterface` collaborator interfaces).
+- `Observability/` sub-package: `AiObservability::begin()` hands out an `AiTransaction` that `measure()`s each step, records `TokenUsage`/cost via `TokenPricing`, and on `commit()` writes an `AiTransactionRecord` through an `ObservabilityRecorderInterface` (`MarkdownObservabilityRecorder` → `OBSERVABILITY.md` in prod, `InMemoryObservabilityRecorder` in tests). Uses PSR-20 clock + `hrtime` monotonic timer injection for deterministic tests.
+
+Entry points:
 - REST: `GET /api/patient/:puuid/history_summary` → `PatientHistorySummaryRestController` (UUID→pid, maps `OpenAiException`→HTTP 502).
 - UI: a button + `loadAiHistorySummary()` inlined in `demographics.php:1091-1125` → AJAX to `ai_history_summary.php` (globals + CSRF + ACL, reads pid from session).
+- Diagnosis suggestions: **no entry point yet** — `DiagnosisSuggestionService::suggestByPid()` is exercised only by isolated tests and the `diagnosis-suggestions` skill. Wiring a REST controller / UI hook (with `patients/med` authorization and disclosure auditing) is the outstanding integration step.
 
-Architectural note: the service/REST wiring follows the recommended modern pattern; the UI hook is ad-hoc inline HTML/JS rather than the `RenderEvent`/`SectionEvent` card pattern used elsewhere on the same page — simpler, but less modular.
+Architectural notes: the service layer follows the recommended modern pattern (constructor injection with nullable defaults, interfaces for cross-boundary collaborators, immutable result DTOs, strict types, PSR-20 clock). The observability recorder is cleanly abstracted behind an interface. Two rough edges remain: the history-summary UI hook is ad-hoc inline HTML/JS rather than the `RenderEvent`/`SectionEvent` card pattern used elsewhere on the same page, and `MarkdownObservabilityRecorder` writes to a repo-root Markdown file rather than a durable store (fine for a demo ledger, not for production telemetry).
 
 ---
 
@@ -347,7 +362,7 @@ Compliance gaps:
 
 | Gap | Severity | Detail |
 |-----|----------|--------|
-| C-1 AI PHI disclosure is not audited | High | No `EventAuditLogger` call exists in `src/Services/AI/*`, `PatientHistorySummaryRestController`, or `ai_history_summary.php`. A disclosure of PHI to a third party (OpenAI) leaves no record of who requested it, for which patient, when, or what data categories were sent — directly undermining §164.312(b) and the §164.528 accounting-of-disclosures duty. |
+| C-1 AI PHI disclosure is not audited | High | No `EventAuditLogger` call exists in `src/Services/AI/*`, `PatientHistorySummaryRestController`, or `ai_history_summary.php`, for either AI service. A disclosure of PHI to a third party (OpenAI) leaves no record of who requested it, for which patient, when, or what data categories were sent — directly undermining §164.312(b) and the §164.528 accounting-of-disclosures duty. The `OBSERVABILITY.md` ledger added since the last revision records that *a* transaction occurred (type, timing, tokens, cost, outcome) but is **identifier-free by design** — it names neither the user nor the patient — so it cannot serve as a §164.528 accounting of disclosures. |
 | Audit logging is disable-able | Medium | `enable_auditlog` and each `audit_events_*` category can be turned off (`library/globals.inc.php:2778-2845`); a misconfiguration silently removes the activity record. |
 | No log-review workflow / alerting in core | Medium | The system records events but provides limited built-in periodic-review or anomaly-alerting tooling (§164.308(a)(1)(ii)(D) expects active review, not just capture). ATNA export to a SIEM is the intended path but is optional and off by default. |
 
@@ -392,9 +407,9 @@ What OpenEMR implements:
 
  What the code does today: 
 
-- The AI feature transmits clinical PHI (encounter reason/date, social history, active problem list) to `https://api.openai.com/v1/chat/completions` (`PatientHistorySummaryService.php:83-86`; `OpenAiChatClient.php:52-60`; `OpenAiConfig.php:26-28,57-59`).
-- It  minimizes identifiers  — name and DOB are deliberately excluded (`PatientHistorySummaryService.php:12-13`). This reduces, but does  not eliminate , PHI: clinical facts tied to a retrievable patient record remain PHI, and de-identification to the §164.514(b) standard is not performed.
-- The  only  BAA control is a code comment / `.env.example` note (`OpenAiChatClient.php:10-12`; `.env.example:8`) — there is  no runtime gate  that checks for a BAA or blocks PHI transmission when one is absent.
+- **Two** AI services now transmit clinical PHI to `https://api.openai.com/v1/chat/completions`: the history summary (encounter reason/date, social history, active problem list — `PatientHistorySummaryService.php:105-110`) and differential-diagnosis suggestions (current visit, active medications, pre-existing conditions — `DiagnosisSuggestionService.php:106-111`), both via `OpenAiChatClient::chatWithUsage()` (`OpenAiChatClient.php:65-76`; `OpenAiConfig.php:26-28,57-59`).
+- Both  minimize identifiers  — name and DOB are deliberately excluded (`PatientHistorySummaryService.php:12-13`; `DiagnosisSuggestionService.php:17-19`). This reduces, but does  not eliminate , PHI: clinical facts tied to a retrievable patient record remain PHI, and de-identification to the §164.514(b) standard is not performed.
+- The  only  BAA control is a code comment / `.env.example` note (`OpenAiChatClient.php:10-12`) — there is  no runtime gate  that checks for a BAA or blocks PHI transmission when one is absent, on either path. `OpenAiConfig::fromEnvironment()` still reads only `OPENAI_API_KEY`/`OPENAI_MODEL`.
 
  BAA compliance requirements (must all hold before production PHI use): 
 
@@ -426,8 +441,8 @@ What OpenEMR implements:
 
 | ID | Audit | Finding | Severity |
 |----|-------|---------|----------|
-| S-1 | Security | AI sends clinical PHI to OpenAI without BAA enforcement / retention control |  Critical  |
-| C-5 | Compliance | No programmatic BAA/ZDR gate before transmitting PHI to the LLM (§164.502(e)) |  Critical  |
+| S-1 | Security | AI sends clinical PHI to OpenAI without BAA enforcement / retention control — now on two paths (summary + diagnosis) |  Critical  |
+| C-5 | Compliance | No programmatic BAA/ZDR gate before transmitting PHI to the LLM (§164.502(e)); applies to both AI services |  Critical  |
 | P-1 | Performance | Synchronous, uncached, 30s-timeout OpenAI call on the request path |  Critical (UX)  |
 | S-2 | Security | No audit-trail entry for AI PHI disclosure | High |
 | C-1 | Compliance | AI PHI disclosure not audited (§164.312(b), §164.528) | High |
@@ -446,9 +461,13 @@ What OpenEMR implements:
 | S-5 | Security | Core session cookie not `HttpOnly`/`Secure` by default | Medium |
 | S-6 | Security | `patient_data` unencrypted at application layer | Medium |
 | S-7 | Security | MFA optional; brute-force limits disable-able | Medium |
+| S-8 | Security | New `DiagnosisSuggestionService` is a second PHI→OpenAI path; when wired to a route/UI it must inherit `patients/med` authorization + disclosure auditing (none exist yet) | High (when exposed) |
 | A-1 | Architecture | No full DI container; `new Service()` + static locators | Medium |
 | A-2 | Architecture | AI UI hook inlined in `demographics.php` vs event/card pattern | Low |
+| A-3 | Architecture | AI observability ledger persists to a repo-root Markdown file, not a durable telemetry store | Low |
 | DQ-2 | Data Quality | Uniform formats / single email domain — not representative of real data | Low (info) |
+
+> **Note (mitigation, not a finding):** the AI observability ledger added in this cycle partially addresses the "no metrics/monitoring" aspect of P-1 by capturing per-step latency, token, and cost data for every AI call. It does **not** alter the synchronous/uncached/blocking call path (P-1 stands) and, being identifier-free, does **not** satisfy the S-2 / C-1 disclosure-auditing gap.
 
 ---
 
