@@ -24,6 +24,7 @@ use OpenEMR\RestControllers\AllergyIntoleranceRestController;
 use OpenEMR\RestControllers\AppointmentRestController;
 use OpenEMR\RestControllers\BackgroundServiceRestController;
 use OpenEMR\RestControllers\ConditionRestController;
+use OpenEMR\RestControllers\DiagnosisSuggestionRestController;
 // TODO: Remove this import when the OpenEMR\RestControllers\Config\RestConfig is no longer needed
 use OpenEMR\RestControllers\Config\RestConfig;
 use OpenEMR\RestControllers\DocumentRestController;
@@ -103,9 +104,15 @@ return [
 
         return $return;
     },
-    "GET /api/patient/:puuid/history_summary" => function ($puuid, HttpRestRequest $request) {
+    "GET /api/patient/:puuid/history_summary" => function (string $puuid, HttpRestRequest $request) {
         RestConfig::request_authorization_check($request, "patients", "demo");
         $return = (new PatientHistorySummaryRestController())->getSummary($puuid, $request);
+
+        return $return;
+    },
+    "GET /api/patient/:puuid/diagnosis_suggestions" => function (string $puuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "encounters", "auth_a");
+        $return = (new DiagnosisSuggestionRestController())->getSuggestions($puuid, $request);
 
         return $return;
     },

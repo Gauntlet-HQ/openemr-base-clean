@@ -32,7 +32,7 @@ use OpenEMR\Services\AI\Observability\AiObservability;
 use OpenEMR\Services\EncounterService;
 use OpenEMR\Services\PatientIssuesService;
 
-final class DiagnosisSuggestionService
+final class DiagnosisSuggestionService implements DiagnosisSuggestionServiceInterface
 {
     private const SYSTEM_PROMPT = 'You are a clinical decision-support assistant for a licensed physician. '
         . 'Given structured fragments of a patient\'s current visit, active medications, and pre-existing '
