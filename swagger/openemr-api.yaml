@@ -2763,6 +2763,44 @@ paths:
       security:
         -
           openemr_auth: {  }
+  '/api/patient/{puuid}/diagnosis_suggestions':
+    get:
+      tags:
+        - standard
+      description: 'Returns AI-generated advisory differential diagnosis suggestions for a patient, derived from their most recent encounter and active problem list. Suggestions are clinical decision support only and require clinician review. When too little clinical data is on record, hasSufficientData is false.'
+      parameters:
+        -
+          name: puuid
+          in: path
+          description: 'The uuid for the patient.'
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: 'Differential diagnosis suggestion result.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  hasSufficientData:
+                    description: 'False when too little clinical data was available to suggest diagnoses.'
+                    type: boolean
+                  suggestions:
+                    description: 'The advisory differential diagnosis text, or an insufficient-data label.'
+                    type: string
+                type: object
+        400:
+          $ref: '#/components/responses/badrequest'
+        401:
+          $ref: '#/components/responses/unauthorized'
+        404:
+          description: 'The patient could not be found.'
+        502:
+          description: 'The AI diagnosis service is currently unavailable.'
+      security:
+        -
+          openemr_auth: {  }
   '/api/patient/{puuid}/employer':
     get:
       tags:

@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace OpenEMR\RestControllers;
 
+use OpenApi\Attributes as OA;
 use OpenEMR\Common\Http\HttpRestRequest;
 use OpenEMR\Services\AI\DiagnosisSuggestionService;
 use OpenEMR\Services\AI\DiagnosisSuggestionServiceInterface;
@@ -38,6 +39,58 @@ class DiagnosisSuggestionRestController
         $this->suggestionService = $suggestionService ?? new DiagnosisSuggestionService();
     }
 
+    #[OA\Get(
+        path: '/api/patient/{puuid}/diagnosis_suggestions',
+        description: 'Returns AI-generated advisory differential diagnosis suggestions for a '
+            . 'patient, derived from their most recent encounter and active problem list. '
+            . 'Suggestions are clinical decision support only and require clinician review. '
+            . 'When too little clinical data is on record, hasSufficientData is false.',
+        tags: ['standard'],
+        parameters: [
+            new OA\Parameter(
+                name: 'puuid',
+                in: 'path',
+                description: 'The uuid for the patient.',
+                required: true,
+                schema: new OA\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OA\Response(
+                response: '200',
+                description: 'Differential diagnosis suggestion result.',
+                content: new OA\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OA\Schema(
+                        properties: [
+                            new OA\Property(
+                                property: 'hasSufficientData',
+                                description: 'False when too little clinical data was available to suggest diagnoses.',
+                                type: 'boolean'
+                            ),
+                            new OA\Property(
+                                property: 'suggestions',
+                                description: 'The advisory differential diagnosis text, or an insufficient-data label.',
+                                type: 'string'
+                            ),
+                        ],
+                        type: 'object'
+                    )
+                )
+            ),
+            new OA\Response(response: '400', ref: '#/components/responses/badrequest'),
+            new OA\Response(response: '401', ref: '#/components/responses/unauthorized'),
+            new OA\Response(
+                response: '404',
+                description: 'The patient could not be found.'
+            ),
+            new OA\Response(
+                response: '502',
+                description: 'The AI diagnosis service is currently unavailable.'
+            ),
+        ],
+        security: [['openemr_auth' => []]]
+    )]
     public function getSuggestions(string $puuid, HttpRestRequest $request): Response
     {
         $pid = $this->pidResolver->resolvePidByUuid($puuid);

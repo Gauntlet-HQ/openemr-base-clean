@@ -1096,7 +1096,11 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                             <button type="button" id="ai_history_summary_btn" class="btn btn-primary btn-sm mr-2" onclick="loadAiHistorySummary()">
                                 <i class="fa fa-robot mr-1"></i><?php echo xlt('AI History Summary'); ?>
                             </button>
+                            <button type="button" id="ai_diagnosis_btn" class="btn btn-primary btn-sm mr-2" onclick="loadAiDiagnosisSuggestions()">
+                                <i class="fa fa-stethoscope mr-1"></i><?php echo xlt('AI Diagnosis Suggestions'); ?>
+                            </button>
                             <span id="ai_history_summary_result" class="text-muted"></span>
+                            <span id="ai_diagnosis_result" class="text-muted w-100 mt-1" style="white-space: pre-wrap;"></span>
                         </div>
                     </div>
                 </div>
@@ -1117,6 +1121,28 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                         })
                         .catch(() => {
                             out.textContent = <?php echo js_escape(xl('Unable to generate the summary.')); ?>;
+                        })
+                        .finally(() => {
+                            btn.disabled = false;
+                        });
+                }
+
+                function loadAiDiagnosisSuggestions() {
+                    const btn = document.getElementById('ai_diagnosis_btn');
+                    const out = document.getElementById('ai_diagnosis_result');
+                    top.restoreSession();
+                    btn.disabled = true;
+                    out.classList.add('text-muted');
+                    out.textContent = <?php echo js_escape(xl('Generating diagnosis suggestions...')); ?>;
+                    const body = new FormData();
+                    body.append('csrf_token_form', <?php echo js_escape(CsrfUtils::collectCsrfToken(session: $session)); ?>);
+                    fetch('ai_diagnosis_suggestions.php', { method: 'POST', credentials: 'same-origin', body: body })
+                        .then(response => response.json())
+                        .then(data => {
+                            out.textContent = data.suggestions || data.error || <?php echo js_escape(xl('No diagnosis suggestions available.')); ?>;
+                        })
+                        .catch(() => {
+                            out.textContent = <?php echo js_escape(xl('Unable to generate diagnosis suggestions.')); ?>;
                         })
                         .finally(() => {
                             btn.disabled = false;
