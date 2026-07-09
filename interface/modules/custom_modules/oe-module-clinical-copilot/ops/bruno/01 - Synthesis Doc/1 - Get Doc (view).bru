@@ -1,0 +1,43 @@
+meta {
+  name: 1 - Get Doc (view)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/doc.php?pid={{pid}}
+  body: none
+  auth: none
+}
+
+query {
+  pid: {{pid}}
+}
+
+docs {
+  Facts-first pre-visit synthesis view (ARCHITECTURE.md §1, U8). Renders
+  HTML (Twig), not JSON -- there is no JSON read API for the doc, by
+  design (§1.3: "all endpoints are module pages"). Served facts-only under
+  a banner if the LLM was unavailable when the doc was generated (I6);
+  never a raw exception.
+
+  Expected response shape (HTML, key markers to assert on or eyeball):
+  - `Clinical Co-Pilot -- Pre-Visit Synthesis` heading + the patient's
+    name/MRN if `{{pid}}` exists and has a computed doc.
+  - A `citations checked` badge (deterministic verifier ran, V1-V6) unless
+    `doc.capability_crash` is true, in which case a "Synthesis paused"
+    banner replaces it and only surviving-capability facts render (§6.1).
+  - A fact table per capability (ControlProxy, OverdueTests,
+    PendingResults, MedResponse, VitalsTrend) with citation superscripts.
+  - A History section (every computed attempt, most recent first).
+  - The chat panel (U11) below it, pre-seeded from this same fact set.
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("renders the synthesis page for a known patient", function () {
+    expect(res.getBody()).to.include("Pre-Visit Synthesis");
+  });
+}

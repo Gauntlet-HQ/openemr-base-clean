@@ -1,0 +1,280 @@
+{#
+# Clinical Co-Pilot -- observability dashboard (U12, ARCHITECTURE.md §3.3).
+#
+# Auto-refreshing via a plain meta-refresh (kept deliberately simple --
+# a dashboard that must never itself become a debugging problem). Click-
+# through chain: metric tile links to the filtered request list below ->
+# each request row links to its span waterfall (?correlation_id=...) ->
+# each span with a payload_ref links to that payload's full content
+# (?payload_ref=...). All server-rendered, in-app, ACL-gated.
+#
+# Autoescape is globally OFF for this project -- every dynamic value below
+# is explicitly escaped with |text, |attr, |xlt, or |xla.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Clinical Co-Pilot -- Observability"|xlt }}</title>
+    {{ setupHeader() }}
+    <meta http-equiv="refresh" content="30">
+    <style>
+        .ccp-tile { border: 1px solid #dee2e6; border-radius: 4px; padding: 0.75rem; margin-bottom: 0.75rem; }
+        .ccp-tile h6 { color: #6c757d; font-size: 0.8em; text-transform: uppercase; margin-bottom: 0.25rem; }
+        .ccp-tile .ccp-value { font-size: 1.5em; font-weight: 600; }
+        .ccp-waterfall td, .ccp-waterfall th { font-size: 0.85em; }
+        .ccp-payload { white-space: pre-wrap; word-break: break-word; font-size: 0.8em; background: #f8f9fa; padding: 0.5rem; }
+    </style>
+</head>
+<body class="body_top">
+<div class="container-fluid mt-3">
+    <h4><i class="fa fa-line-chart mr-2"></i>{{ "Clinical Co-Pilot -- Observability"|xlt }}
+        <small class="text-muted">{{ "auto-refreshes every 30s -- window: last"|xlt }} {{ window_hours }}h</small>
+    </h4>
+
+    {% if alerts is not empty %}
+        <div class="alert alert-danger">
+            <strong>{{ "Firing alerts"|xlt }}:</strong>
+            <ul class="mb-0">
+                {% for a in alerts %}
+                    <li>[{{ a.started_at|text }}] <strong>{{ a.alert|text }}</strong>: {{ a.message|text }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header"><strong>{{ "Circuit breaker & readiness"|xlt }}</strong></div>
+        <div class="card-body">
+            <p>
+                {{ "Breaker"|xlt }}:
+                <span class="badge {{ breaker.open ? 'badge-danger' : 'badge-success' }}">{{ breaker.open ? "OPEN"|xlt : "closed"|xlt }}</span>
+                {% if breaker.reason %}<span class="text-muted small">{{ breaker.reason|text }}</span>{% endif %}
+                &middot; {{ "DB"|xlt }}: <span class="badge {{ ready.db == 'ok' ? 'badge-success' : 'badge-danger' }}">{{ ready.db|text }}</span>
+                &middot; {{ "tables writable"|xlt }}: <span class="badge {{ ready.tables_writable == 'ok' ? 'badge-success' : 'badge-danger' }}">{{ ready.tables_writable|text }}</span>
+                &middot; {{ "LLM"|xlt }}: <span class="badge {{ ready.llm == 'ok' ? 'badge-success' : 'badge-warning' }}">{{ ready.llm|text }}</span>
+                &middot; {{ "worker heartbeat"|xlt }}: <span class="badge {{ ready.worker_heartbeat == 'ok' ? 'badge-success' : 'badge-warning' }}">{{ ready.worker_heartbeat|text }}</span>
+            </p>
+            <p class="text-muted small">
+                {{ "Rate limits"|xlt }}: {{ "max active sessions/user"|xlt }}={{ limits.max_active_sessions_per_user }},
+                {{ "max turns/user/hr"|xlt }}={{ limits.max_turns_per_user_per_hour }},
+                {{ "daily spend cap"|xlt }}=${{ limits.daily_llm_spend_cap_usd }},
+                {{ "hourly burn cap"|xlt }}=${{ limits.hourly_llm_burn_cap_usd }}
+            </p>
+            <form method="post" action="{{ dashboard_url|attr }}" class="form-inline">
+                {# See doc.html.twig's Regenerate form for why the field name is
+                   pinned explicitly: csrfToken()'s own default ("_token") does not
+                   match dashboard.php's CsrfUtils::checkCsrfInput() default key
+                   ("csrf_token_form"); left as the default it silently 403s the
+                   breaker force-open/reset actions. #}
+                {{ csrfToken('default', 'csrf_token_form') }}
+                {% if breaker.open %}
+                    <input type="hidden" name="action" value="breaker_reset">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">{{ "Manual reset (ACL-gated, audit-logged)"|xlt }}</button>
+                {% else %}
+                    <input type="hidden" name="action" value="breaker_force_open">
+                    <input type="text" name="reason" class="form-control form-control-sm mr-2" placeholder="{{ 'reason'|attr }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ "Force breaker open"|xlt }}</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Requests (window)"|xlt }}</h6>
+            <div class="ccp-value">
+                {{ "chat"|xlt }}: <a href="{{ dashboard_url|attr }}?kind=chat_turn">{{ metrics.requests_by_kind.chat_turn }}</a>
+                &middot; {{ "synthesis"|xlt }}: <a href="{{ dashboard_url|attr }}?kind=render">{{ metrics.requests_by_kind.render }}</a>
+            </div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Error rate"|xlt }}</h6>
+            <div class="ccp-value"><a href="{{ dashboard_url|attr }}?status=error">{{ metrics.error_rate_pct }}%</a></div>
+            <small class="text-muted">{{ metrics.error_count }} {{ "errors"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Cache (digest) hit rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.cache_hit_rate_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Degradations"|xlt }}</h6>
+            <div class="ccp-value"><a href="{{ dashboard_url|attr }}?status=degraded">{{ metrics.degradation_count }}</a></div>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6"><div class="ccp-tile">
+            <h6>{{ "Latency p50/p95 per step (ms)"|xlt }}</h6>
+            <table class="table table-sm mb-0">
+                <thead><tr><th>{{ "Kind"|xlt }}</th><th>p50</th><th>p95</th><th>n</th></tr></thead>
+                <tbody>
+                {% for kind, stats in metrics.latency_percentiles_by_kind %}
+                    <tr><td>{{ kind|text }}</td><td>{{ stats.p50 }}</td><td>{{ stats.p95 }}</td><td>{{ stats.count }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div></div>
+        <div class="col-md-6"><div class="ccp-tile">
+            <h6>{{ "Verification pass/fail per check"|xlt }}</h6>
+            <table class="table table-sm mb-0">
+                <thead><tr><th>{{ "Check"|xlt }}</th><th>{{ "Passed"|xlt }}</th><th>{{ "Failed"|xlt }}</th></tr></thead>
+                <tbody>
+                {% for check, counts in metrics.verification_pass_fail_by_check %}
+                    <tr><td>{{ check|text }}</td><td>{{ counts.passed }}</td><td>{{ counts.failed }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Tool calls"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.tool_call_counts.total }}</div>
+            <small class="text-muted">{{ metrics.tool_failure_rate_pct }}% {{ "failure rate (aggregate across tools)"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "LLM retries"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.llm_retry_count }}</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Tokens / cost"|xlt }}</h6>
+            <div class="ccp-value">${{ metrics.tokens_and_cost.cost_usd_total }}</div>
+            <small class="text-muted">{{ metrics.tokens_and_cost.tokens_in }} {{ "in"|xlt }} / {{ metrics.tokens_and_cost.tokens_out }} {{ "out"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Worker lag"|xlt }}</h6>
+            <div class="ccp-value">{{ "n/a"|xlt }}</div>
+            <small class="text-muted">{{ metrics.worker_lag.note|text }}</small>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Reviewer concurrence rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.reviewer_concurrence_rate_pct }}%</div>
+            <small class="text-muted">{{ "advisory Flash reviewer -- never a gate"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Salience score"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.salience_score_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Narrative density ratio"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.narrative_density_ratio_avg }}</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Fact utilization (uncited %)"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.fact_utilization_rate_avg }}</div>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Chat drill-down rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.chat_drilldown_rate_pct }}%</div>
+            <small class="text-muted">{{ "turns needing a tool call beyond preload"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Unaccounted entity rate (I14)"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.unaccounted_entity_rate_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Citation click-through rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.citation_click_through_rate_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Facts panel opens"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.facts_panel_opens }}</div>
+        </div></div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>{{ "Requests"|xlt }}</strong>
+            {% if kind_filter or status_filter %}
+                <a href="{{ dashboard_url|attr }}" class="small">{{ "clear filters"|xlt }}</a>
+            {% endif %}
+        </div>
+        <div class="card-body table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>{{ "Started"|xlt }}</th><th>{{ "Kind"|xlt }}</th><th>{{ "Status"|xlt }}</th><th>{{ "Pid"|xlt }}</th><th>{{ "Spans"|xlt }}</th><th>{{ "Correlation"|xlt }}</th></tr></thead>
+                <tbody>
+                {% for r in requests %}
+                    <tr>
+                        <td>{{ r.started_at|text }}</td>
+                        <td>{{ r.kind|text }}</td>
+                        <td>{{ r.status|text }}</td>
+                        <td>{{ r.pid ?? '-' }}</td>
+                        <td>{{ r.span_count }}</td>
+                        <td><a href="{{ dashboard_url|attr }}?correlation_id={{ r.correlation_id|url_encode }}">{{ r.correlation_id|text }}</a></td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="text-muted">{{ "No requests in this window."|xlt }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if correlation_id %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>{{ "Span waterfall"|xlt }}</strong> <small class="text-muted">{{ correlation_id|text }}</small></div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm ccp-waterfall">
+                    <thead><tr>
+                        <th>{{ "Started"|xlt }}</th><th>{{ "Kind"|xlt }}</th><th>{{ "Duration (ms)"|xlt }}</th>
+                        <th>{{ "Status"|xlt }}</th><th>{{ "Model"|xlt }}</th><th>{{ "Tokens"|xlt }}</th>
+                        <th>{{ "Error"|xlt }}</th><th>{{ "Payload"|xlt }}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for span in waterfall %}
+                        <tr class="{{ span.status == 'error' ? 'table-danger' : (span.status == 'degraded' ? 'table-warning' : '') }}">
+                            <td>{{ span.started_at|text }}</td>
+                            <td>{{ span.kind|text }}</td>
+                            <td>{{ span.duration_ms ?? '-' }}</td>
+                            <td>{{ span.status|text }}</td>
+                            <td>{{ span.model ?? '-' }}</td>
+                            <td>{{ span.tokens_in ?? '-' }}/{{ span.tokens_out ?? '-' }}</td>
+                            <td>{{ span.error_detail ?? '' }}</td>
+                            <td>
+                                {% if span.payload_ref %}
+                                    <a href="{{ dashboard_url|attr }}?correlation_id={{ correlation_id|url_encode }}&payload_ref={{ span.payload_ref|url_encode }}">{{ "view"|xlt }}</a>
+                                {% else %}
+                                    <span class="text-muted">{{ "none captured"|xlt }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if payload_refs is not empty %}
+                    <p class="small text-muted mb-1">{{ "All payloads stored for this correlation id:"|xlt }}</p>
+                    <ul class="small">
+                        {% for p in payload_refs %}
+                            <li>
+                                <a href="{{ dashboard_url|attr }}?correlation_id={{ correlation_id|url_encode }}&payload_ref={{ p.payload_ref|url_encode }}">{{ p.kind|text }}</a>
+                                ({{ p.created_at|text }})
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                {% if payload %}
+                    <h6>{{ "Payload"|xlt }}: {{ payload.kind|text }}</h6>
+                    <div class="ccp-payload">{{ payload_json|text }}</div>
+                {% elseif payload_ref %}
+                    <div class="alert alert-warning small">{{ "No payload found for this reference."|xlt }}</div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+</body>
+</html>

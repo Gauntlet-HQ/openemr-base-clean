@@ -1,0 +1,37 @@
+meta {
+  name: 00 - Auth Bootstrap
+  seq: 1
+}
+
+docs {
+  # Login + CSRF bootstrap (R5)
+
+  Every other folder in this collection needs an authenticated session
+  cookie and a valid CSRF token. Run these three requests once, in order,
+  before anything else:
+
+  1. **Get Login Page** -- a plain GET establishes the PHP session (and,
+     server-side, the CSRF private key the session will use for every
+     token it issues -- see `CsrfUtils::setupCsrfKey`) and returns the
+     session cookie. Bruno's cookie jar picks it up automatically as long
+     as "Enable Cookies" stays on for this collection (the default).
+  2. **Submit Login** -- POSTs the seeded dev-stack credentials
+     (`admin`/`pass`, see CLAUDE.md / CONTRIBUTING.md) to the same host
+     login handler every browser session uses
+     (`interface/main/main_screen.php?auth=login`). On success the
+     session is now authenticated as `authUserID`.
+  3. **Bootstrap CSRF Token** -- GETs the module's own synthesis doc page
+     for the seeded patient in `{{pid}}` (a plain, read-only GET needs no
+     CSRF itself) and scrapes the token Clinical Co-Pilot's own Twig
+     templates embed in that page (`doc.html.twig`'s Regenerate form /
+     the chat panel's hidden `#ccpChatCsrf` field, both fed by
+     `CsrfUtils::collectCsrfToken()` under the hood). The token is saved
+     to the runtime variable `csrf_token`, consumed by every state-changing
+     request below (`doc.php` Regenerate, `dashboard.php` breaker actions,
+     `chat.php` start/turn/reseed).
+
+  This mirrors exactly how a physician's browser gets a session + token --
+  there is no separate "issue me a CSRF token" API endpoint. A grader can
+  run this folder then every other folder without reading any module
+  source.
+}

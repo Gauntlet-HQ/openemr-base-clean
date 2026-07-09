@@ -1,0 +1,33 @@
+meta {
+  name: 1 - Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/health.php
+  body: none
+  auth: none
+}
+
+docs {
+  Liveness only -- checks NO dependencies (not DB, not LLM), so a DB
+  outage never fails liveness and gets the process needlessly restarted
+  by an orchestrator (ARCHITECTURE.md §3.4).
+
+  Example response:
+  ```json
+  { "status": "ok", "module": "oe-module-clinical-copilot", "version": "0.1.0" }
+  ```
+}
+
+tests {
+  test("always 200 when the process is alive", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("reports ok + version", function () {
+    const data = res.getBody();
+    expect(data.status).to.equal("ok");
+    expect(data.module).to.equal("oe-module-clinical-copilot");
+  });
+}

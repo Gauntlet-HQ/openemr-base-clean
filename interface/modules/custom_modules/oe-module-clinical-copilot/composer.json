@@ -1,0 +1,39 @@
+{
+    "name": "openemr/oe-module-clinical-copilot",
+    "description": "Clinical Co-Pilot: a pre-visit clinical synthesis and chat co-pilot for outpatient endocrinology, built on a deterministic fact layer with a cited LLM narration surface.",
+    "type": "openemr-module",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Clinical Co-Pilot Team",
+            "email": "adamnash19@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "guzzlehttp/guzzle": "^7.10.0",
+        "google/auth": "^1.37"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenEMR\\Modules\\ClinicalCopilot\\": "src/"
+        }
+    },
+    "extra": {
+        "openemr": {
+            "type": "custom-module",
+            "directory": "oe-module-clinical-copilot"
+        }
+    },
+    "keywords": [
+        "openemr",
+        "module",
+        "clinical-copilot",
+        "endocrinology",
+        "synthesis",
+        "chat"
+    ],
+    "support": {
+        "issues": "https://github.com/openemr/openemr/issues"
+    }
+}

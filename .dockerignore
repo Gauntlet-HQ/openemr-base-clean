@@ -1,0 +1,9 @@
+# Docker build context for Railway flex wrapper only.
+*
+
+!Dockerfile.railway
+!railway-entrypoint.sh
+!railway-flex-bootstrap.sh
+!railway-preinstall-db.sh
+!railway-configure-apache.sh
+!patch-flex-openemr.sh

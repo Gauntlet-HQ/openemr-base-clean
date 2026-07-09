@@ -1,0 +1,83 @@
+{
+  "repo": "openemr (pruned import, branch dev)",
+  "generated_by": "brownfield-index fan-out (12 subtree agents, 0 quarantined)",
+  "summary": "OpenEMR is a PHP 8.2+ monolithic EMR/EHR web application in mid-modernization: a modern PSR-4 layer (src/, OpenEMR\\ namespace) with services, REST/FHIR controllers and a Symfony-based kernel/event system sits on top of a legacy procedural layer (library/) and ~590 server-rendered UI pages (interface/), each bootstrapping through interface/globals.php. A patient portal (portal/), two plugin systems (interface/modules/), a Node.js C-CDA side-service (ccdaservice/), Twig/Smarty templates (templates/), a dual schema-change mechanism (sql/ live, db/ Doctrine not yet wired), a webpack theme/asset pipeline, and a large docker+GitHub-Actions dev/CI machine complete the system.",
+  "canonical_commands": {
+    "build": [
+      "composer install (PHP deps; no compile step for PHP)",
+      "npm run build (webpack theme compilation + CSS sync -> public/themes/, public/assets/)"
+    ],
+    "test": {
+      "all": "openemr-cmd clean-sweep-tests (alias cst)",
+      "unit": "openemr-cmd unit-test (alias ut)",
+      "api": "openemr-cmd api-test (alias at)",
+      "e2e": "openemr-cmd e2e-test (alias et)",
+      "services": "openemr-cmd services-test (alias st)",
+      "isolated_no_db": "openemr-cmd phpunit-isolated (alias pit) | composer phpunit-isolated (host)",
+      "js": "npm run test:js (Jest; specs live under ccdaservice/)",
+      "fixture_regen": [
+        "openemr-cmd update-twig-fixtures (alias utf) after editing render-tested Twig templates",
+        "openemr-cmd update-layout-field-fixtures (alias ulff) after changing library/options.inc.php renderer"
+      ]
+    },
+    "lint": [
+      "openemr-cmd code-quality (alias cq) = composer code-quality: codespell + php-syntax-check + phpcbf + phpcs (PSR-12/PER-CS) + phpstan (level 10 + ~18 custom rules in tests/PHPStan/Rules/) + rector-check + require-checker",
+      "npm run lint:js (ESLint 9 flat config)",
+      "npm run stylelint",
+      "./run-semgrep.sh (security lint with OpenEMR-aware sanitizers attr()/text()/xlt())"
+    ],
+    "notes": "All openemr-cmd commands run inside the docker/development-easy container; in a managed worktree prefix with `openemr-cmd worktree exec <branch>`. PHPStan must run on the full codebase, never a subset."
+  },
+  "subtrees": [
+    {"id": "src", "roots": ["src/"], "partial": ".index/partials/src.json", "purpose": "Modern PSR-4 application layer: ~100 domain services (BaseService pattern), REST/FHIR controllers, Symfony kernel/events, cross-cutting Common/ infrastructure.", "langs": ["php"], "do_not_touch": ["src/FHIR/R4/ (895 generated files)", "src/Gacl/ (vendored phpGACL port)", "src/Cqm/Qdm/ (generated QDM models)"]},
+    {"id": "library", "roots": ["library/"], "partial": ".index/partials/library.json", "purpose": "Legacy procedural helper layer (SQL wrappers, auth bootstrap, escaping, translation, options.inc.php layout renderer); increasingly a thin shim delegating to src/.", "langs": ["php", "javascript"], "do_not_touch": ["library/classes/fpdf/", "library/classes/smtp/", "library/classes/php-barcode.php", "library/classes/TreeMenu.php", "library/classes/PDF_Label.php", "library/fonts/", "library/MedEx/", "library/edihistory/"]},
+    {"id": "interface-core", "roots": ["interface/ (excl. interface/modules/)"], "partial": ".index/partials/interface-core.json", "purpose": "~590 server-rendered clinician UI pages, each bootstrapping via interface/globals.php (session, site, DB, auth, globals bag, module boot).", "langs": ["php", "javascript", "scss"], "do_not_touch": ["interface/main/calendar/modules/PostCalendar/ + includes/ (vendored fork)", "interface/pic/", "interface/billing/edih_*.php"]},
+    {"id": "interface-modules", "roots": ["interface/modules/"], "partial": ".index/partials/interface-modules.json", "purpose": "Two plugin systems: Laminas zend_modules MVC app + event-driven custom_modules (oe-module-*), managed by the Installer Module Manager from the DB.", "langs": ["php", "javascript", "twig", "sql"], "do_not_touch": ["oe-module-comlink-telehealth/public/assets/ (built bundles)", "Carecoordination/autoload_classmap.php (generated)", "per-module table.sql/cleanup.sql (version-gated migrations)"]},
+    {"id": "portal", "roots": ["portal/"], "partial": ".index/partials/portal.json", "purpose": "Patient-facing onsite portal with its own session cookie and auth gate (verify_session.php); patient-pid-scoped pages, messaging, payments, e-sign, Phreeze mini-MVC JSON API.", "langs": ["php", "javascript"], "do_not_touch": ["portal/patient/fwk/libs/verysimple/ (Phreeze)", "portal/patient/fwk/libs/savant/", "portal/patient/fwk/libs/util/", "portal/sign/assets/signature_pad.umd.js", "portal/patient/scripts/libs/LAB.min.js"]},
+    {"id": "templates", "roots": ["templates/"], "partial": ".index/partials/templates.json", "purpose": "View layer: Twig 3 (majority; autoescape OFF, explicit |text/|attr/|xlt filters), legacy Smarty general_*.html views, plain-PHP CDR admin views.", "langs": ["twig", "smarty", "php"], "do_not_touch": ["calendar |raw sinks paired with src/PostCalendar/ViewModel escaping contract"]},
+    {"id": "tests", "roots": ["tests/", "phpunit*.xml", "jest.config.js"], "partial": ".index/partials/tests.json", "purpose": "Test estate: DB-backed suites (phpunit.xml), isolated no-DB (phpunit-isolated.xml), integration config, Panther/Selenium E2E, Jest, bats, plus custom PHPStan/Rector convention rules.", "langs": ["php", "javascript", "bash"], "do_not_touch": ["Twig render fixtures (regen via utf)", "layout field fixtures (regen via ulff)", "Fixtures/*.json", "ECQM data", "Rector rule fixtures", "tests/eventdispatcher/* (sample modules)"]},
+    {"id": "ccdaservice", "roots": ["ccdaservice/"], "partial": ".index/partials/ccdaservice.json", "purpose": "On-demand Node.js TCP daemon (127.0.0.1:6661, 0x1C-delimited XML protocol) converting patient data to C-CDA via vendored blue-button forks; siblings: CQM calc (6660), schematron (6662).", "langs": ["javascript", "php"], "do_not_touch": ["oe-blue-button-generate/", "oe-blue-button-meta/", "oe-blue-button-util/ (vendored forks)", "package-lock.json", "ports 6661/6660/6662 (PHP<->Node contract)"]},
+    {"id": "sql-db", "roots": ["sql/", "db/"], "partial": ".index/partials/sql-db.json", "purpose": "Schema: sql/database.sql (fresh installs) + versioned comment-directive upgrade SQL (the only live mechanism); db/ holds Doctrine Migrations scaffolding explicitly NOT yet integrated (blocked on #10708).", "langs": ["sql", "php"], "do_not_touch": ["all historical *_upgrade.sql before the current dev range (append-only)", "released Doctrine migrations", "'-- v_database:' header (CI-parsed)"]},
+    {"id": "frontend-build", "roots": ["public/", "webpack/", "package.json", "webpack.themes.js", "eslint.config.mjs", "jest.config.js (config ownership shared with tests)"], "partial": ".index/partials/frontend-build.json", "purpose": "Asset factory: webpack 5 compiles ~40 theme variants from interface/themes/ SCSS into gitignored public/themes/; npm postinstall (napa + install-assets.js) copies vendored browser libs into gitignored public/assets/.", "langs": ["javascript", "scss"], "do_not_touch": ["public/assets/ (generated; EXCEPT committed public/assets/modified/ which is patched vendor)", "public/themes/ (generated)", ".webpack-cache/"]},
+    {"id": "dev-infra", "roots": ["docker/", "ci/", "bin/", "tools/", "scripts/", "cli", ".github/workflows/", "build.xml", "cloudbuild.yaml", "docker-version", "codecov.yml", "run-semgrep.sh", "semgrep.yaml"], "partial": ".index/partials/dev-infra.json", "purpose": "Dev stack (docker/development-easy driven by openemr-cmd) and the full CI matrix: ci/<webserver>_<php>_<db> compose dirs whose names ARE the config, quality-gate workflows, docker image pipelines, release tooling, bin/console Symfony CLI.", "langs": ["yaml", "bash", "php", "javascript"], "do_not_touch": ["docker-version (bump triggers image regen)", "ci/<dir> names (parsed as config)", "development-easy compose WT_* vars (worktree tooling)", "GITHUB_COMPOSER_TOKEN* (deliberate public rate-limit token, not a leak)", "byte-identical docker script sets"]},
+    {"id": "root-remainder", "roots": ["index.php + root entry PHP files", "apis/", "oauth2/", "controllers/", "custom/", "contrib/", "gacl/", "ccr/", "sites/", "config/", "swagger/", "docs/", "Documentation/", "meta/", "sphere/", "composer.json"], "partial": ".index/partials/root-remainder.json", "purpose": "Front door: index.php site-resolution/login redirect, apis/dispatch.php + oauth2/authorize.php funnel into ApiApplication with route maps in apis/routes/, controller.php dispatches 10 legacy C_* controllers, version.php gates upgrades, embryonic PSR-11 config/.", "langs": ["php", "yaml"], "do_not_touch": ["gacl/ (ancient vendored phpGACL)", "sites/ (runtime per-site data incl. live DB creds in sqlconf.php)", "swagger/ (vendored UI + generated spec)", "contrib/ (vendored data/importers)", "Documentation/"]}
+  ],
+  "edges": {
+    "description": "X -> Y means X depends on Y (imports/includes/calls at build or runtime). Reverse edges = blast radius: dependents of a changed subtree are its review surface.",
+    "depends_on": {
+      "src": ["library", "root-remainder (custom/code_types.inc.php, version.php)", "interface-core (globals.php, ub04_dispose.php)", "templates (renders via TwigContainer)", "sql-db (SQLUpgradeService interprets upgrade dialect)", "ccdaservice (CqmServiceManager -> port 6660 at runtime)"],
+      "library": ["src (QueryUtils, AuthUtils, OEGlobalsBag, SessionWrapperFactory, services)", "root-remainder (custom/code_types.inc.php)"],
+      "interface-core": ["library", "src", "templates", "root-remainder (sites/<site>/config.php, version.php, custom/)", "frontend-build (public/assets, public/themes at runtime)"],
+      "interface-modules": ["src (ModulesClassLoader, ModulesApplication, events)", "interface-core (globals.php)", "ccdaservice (Carecoordination -> port 6661 at runtime)", "sql-db (module installer consumes upgrade dialect)"],
+      "portal": ["interface-core (globals.php via verify_session.php)", "src", "library", "templates (templates/portal/)", "root-remainder (custom/code_types.inc.php)"],
+      "templates": ["src (TwigContainer/TwigExtension register every filter/function used)", "library (xlt/attr/text/js_escape backing functions)"],
+      "tests": ["src", "library (options.inc.php)", "interface-core (globals.php bootstrap for DB-backed suites)", "dev-infra (selenium/mysql/redis services)"],
+      "ccdaservice": ["src (ccda_gateway.php uses CDADocumentService)", "interface-core (globals.php in gateway)"],
+      "sql-db": ["root-remainder (sql_upgrade.php runner, version.php $v_database)", "src (SQLUpgradeService, CreateTableTrait)", "library (sql_upgrade_fx.php)"],
+      "frontend-build": ["interface-core (interface/themes/ SCSS sources)", "root-remainder (bootstrap.php via public/index.php)"],
+      "dev-infra": ["src (console commands)", "tests (E2E consumes selenium)", "root-remainder (sites/default/sqlconf.php artifact)", "library (semgrep sanitizer refs)"],
+      "root-remainder": ["src (ApiApplication, RestConfig, HealthChecker)", "interface-core (globals.php)", "library (composer autoload files)", "sql-db (upgrade scripts)"]
+    },
+    "blast_radius": {
+      "src": ["library", "interface-core", "interface-modules", "portal", "templates", "tests", "ccdaservice", "sql-db", "frontend-build (public/index.php)", "dev-infra", "root-remainder"],
+      "library": ["src", "interface-core", "portal", "templates", "tests", "sql-db", "dev-infra", "root-remainder"],
+      "interface-core": ["src", "interface-modules", "portal", "tests", "ccdaservice", "frontend-build", "dev-infra (CI installs)", "root-remainder"],
+      "templates": ["src", "interface-core", "portal"],
+      "interface-modules": ["(none inbound except runtime module loading from interface-core bootstrap)"],
+      "portal": ["(leaf; nothing depends on portal)"],
+      "tests": ["dev-infra (CI wiring)"],
+      "ccdaservice": ["src (CqmServiceManager)", "interface-modules (Carecoordination)"],
+      "sql-db": ["src", "interface-modules (installer)", "root-remainder (upgrade runners)"],
+      "frontend-build": ["interface-core (all pages consume built assets)"],
+      "dev-infra": ["tests (suites run inside its stacks)"],
+      "root-remainder": ["everything at runtime (entry points); src/library reference custom/code_types.inc.php and version.php"]
+    },
+    "notable_third_party": ["Symfony components (HttpFoundation, EventDispatcher, Console, Panther)", "Laminas MVC", "Twig 3 / Smarty 4.5", "Doctrine DBAL 4 behind ADODB surface", "PHPUnit 11 / Jest 29 / Mocha (ccdaservice workspaces)", "firehed/container (PSR-11, not fully integrated)", "zircote/swagger-php", "amida-tech blue-button forks (vendored)", "Phreeze + Savant3 (vendored, portal)", "phpGACL (vendored, gacl/ + src/Gacl)", "FPDF (vendored, library/classes)"]
+  },
+  "suspected_bugs": [
+    {"file": "ccdaservice/buganalysis.md", "count": 5, "headline": "Module-global conn/all reassigned per TCP connection with awaits in between — concurrent requests can send one patient's C-CDA to the wrong socket; hardcoded enableDebug=true writes PHI XML to documents/temp/."},
+    {"file": "buganalysis.md", "count": 1, "headline": "apis/dispatch.php returns raw $e->getMessage() in JSON error responses to API clients (information disclosure; violates the project's own error-handling standard)."},
+    {"file": "tests/buganalysis.md", "count": 1, "headline": "Dead getenv() ?? fallbacks in tests/Tests/E2e/Base/BaseTrait.php (getenv() returns false, never null, so the 'selenium' host default is unreachable)."}
+  ],
+  "quarantined": []
+}

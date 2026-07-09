@@ -1,0 +1,45 @@
+#
+# Clinical Co-Pilot module-scoped PHPStan gate -- read-only-enforcement
+# layer 1 (ARCHITECTURE.md §4, ARCHITECTURE_COMPLETE.md U9 row).
+#
+# This is a SEPARATE, additional CI gate from the host's own full-codebase
+# `openemr-cmd phpstan` / `composer phpstan` run (which already analyses this
+# module's files at level 10 as part of `interface`, see the host's
+# phpstan.neon.dist `paths:` list). This config's sole purpose is registering
+# ForbiddenWriteOutsideRepositoriesRule over src/ -- a check that is
+# independent of `level` (custom rules always run regardless of level), so
+# `level` is set low here deliberately: re-running the full level-10 rule set
+# a second time under a second config would be redundant with the host-wide
+# gate and would blur which gate is enforcing what.
+#
+# CI invocation -- this module cannot add or edit a `.github/workflows/*.yml`
+# file itself (that would violate the very additivity invariant this repo's
+# I9 exists to protect, see ops/ci/check-additivity.sh), so wiring this into
+# CI is host-side, documented here rather than shipped as a diff. From the
+# repo root, using the HOST's own installed phpstan (no separate module
+# vendor/ needed):
+#
+#   vendor/bin/phpstan analyse -c interface/modules/custom_modules/oe-module-clinical-copilot/phpstan.neon
+#
+# e.g. as a GitHub Actions step alongside the additivity gate:
+#
+#   - name: Clinical Co-Pilot forbidden-write PHPStan rule
+#     run: vendor/bin/phpstan analyse -c interface/modules/custom_modules/oe-module-clinical-copilot/phpstan.neon --no-progress
+#
+# `paths` below is relative to THIS file's directory (PHPStan resolves
+# `parameters.paths` relative to the config file, not the invoking cwd), so
+# invocation from the repo root above always analyses this module's own
+# src/ regardless of where `vendor/bin/phpstan` happens to be installed.
+#
+parameters:
+    level: 0
+    paths:
+        - src
+    scanFiles:
+        - tests/PHPStan/Rules/ForbiddenWriteOutsideRepositoriesRule.php
+
+services:
+    -
+        class: OpenEMR\Modules\ClinicalCopilot\Tests\PHPStan\Rules\ForbiddenWriteOutsideRepositoriesRule
+        tags:
+            - phpstan.rules.rule

@@ -1,0 +1,24 @@
+meta {
+  name: 1 - Get Login Page
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/interface/login/login.php?site={{site}}
+  body: none
+  auth: none
+}
+
+docs {
+  Establishes the session cookie and the server-side CSRF private key
+  (`CsrfUtils::setupCsrfKey`) that every token issued this session is
+  derived from. No body, no auth header -- this is the same first hit any
+  browser makes before showing the login form.
+}
+
+tests {
+  test("login page is served", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
