@@ -56,3 +56,6 @@ tmp/
 .labs-cred
 .env
 docker/development-easy/.env
+
+# local deploy notes (may contain credentials — keep out of the repo)
+Railway-GitLab-Deploy-Guide.docx
