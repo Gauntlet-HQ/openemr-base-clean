@@ -39,7 +39,7 @@ use OpenEMR\BC\ServiceContainer;
 require_once __DIR__ . "/../../library/forms.inc.php";
 require_once __DIR__ . "/../../library/encounter.inc.php";
 
-class EncounterService extends BaseService
+class EncounterService extends BaseService implements \OpenEMR\Services\AI\RecentEncounterProviderInterface
 {
     use ServiceEventTrait;
 
