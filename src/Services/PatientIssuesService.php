@@ -24,7 +24,7 @@ use OpenEMR\Services\Search\TokenSearchValue;
 use OpenEMR\Services\Traits\ServiceEventTrait;
 use OpenEMR\Validators\ProcessingResult;
 
-class PatientIssuesService extends BaseService
+class PatientIssuesService extends BaseService implements \OpenEMR\Services\AI\ActivePatientIssuesProviderInterface
 {
     use ServiceEventTrait;
 

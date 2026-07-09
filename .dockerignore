@@ -1,0 +1,23 @@
+# Build context trimming for the Railway image (see Dockerfile).
+# Host-built dependencies are intentionally excluded so the image builds clean,
+# production dependencies. Do NOT exclude railway/ (the entrypoint lives there),
+# composer.*/package*.json (needed to build), or the source tree.
+
+.git
+.gitattributes
+.github
+
+# Host-built deps (rebuilt inside the image)
+/vendor
+**/node_modules
+
+# Caches / scratch
+/tmp
+.webpack-cache
+**/*.log
+**/.DS_Store
+
+# Railway/deploy meta not needed inside the image
+Dockerfile
+.dockerignore
+DEPLOY.md
