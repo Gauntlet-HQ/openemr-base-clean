@@ -4,9 +4,9 @@
  * generate_sample_patients.php
  *
  * CLI utility that seeds the database with realistic sample patients for
- * development and demo use. Generates demographics, intake/social history,
- * encounters, problem lists, prescriptions, and bloodwork with configurable
- * distributions.
+ * development and demo use. Generates demographics (including date of birth
+ * and a synthetic SSN), intake/social history, encounters, problem lists,
+ * prescriptions, and bloodwork with configurable distributions.
  *
  * Distributions:
  *   - 85% established patients (have prior history: past encounters + problems)
@@ -368,12 +368,19 @@ try {
         $dob = date('Y-m-d', strtotime("-{$age} years -" . random_int(0, 364) . " days"));
         [$city, $state, $zip] = $cities[array_rand($cities)];
 
+        // Synthetic SSN. The serial segment mirrors the pubpid sequence so
+        // values are unique within a run and obviously fake (area 700-899,
+        // never a real SSA assignment range for these sample rows).
+        $seq = $i + 1;
+        $ss = sprintf('%03d-%02d-%04d', 700 + ($seq % 200), 10 + ($seq % 89), $seq);
+
         $patientData = [
             'title' => $isMale ? 'Mr.' : 'Ms.',
             'fname' => $fname,
             'lname' => $lname,
             'mname' => $mname,
             'DOB' => $dob,
+            'ss' => $ss,
             'sex' => $sex,
             'race' => $raceCodes[array_rand($raceCodes)],
             'ethnicity' => $ethnicityCodes[array_rand($ethnicityCodes)],
