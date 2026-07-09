@@ -68,6 +68,11 @@ services:
       EASY_DEV_MODE: "yes"
       EASY_DEV_MODE_NEW: "yes"
       DEVELOPER_TOOLS: "yes"
+      # Server-side OpenAI credentials for the AI features (patient history
+      # summary, diagnosis suggestions). Passed through from the host shell or
+      # a gitignored docker/development-easy/.env; never commit the real key.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-}"
       XDEBUG_ON: 1
       XDEBUG_PROFILER_ON: 1
       # setting xdebug client host for cases where xdebug.discover_client_host fails
