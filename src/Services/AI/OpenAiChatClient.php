@@ -24,9 +24,10 @@ namespace OpenEMR\Services\AI;
 
 use OpenEMR\BC\ServiceContainer;
 use OpenEMR\Common\Http\oeHttp;
+use OpenEMR\Services\AI\Observability\TokenUsage;
 use Psr\Log\LoggerInterface;
 
-final class OpenAiChatClient
+final class OpenAiChatClient implements OpenAiChatClientInterface
 {
     private readonly OpenAiConfig $config;
     private readonly LoggerInterface $logger;
@@ -42,11 +43,26 @@ final class OpenAiChatClient
     /**
      * Send a chat completion request and return the assistant's text.
      *
+     * Thin wrapper over chatWithUsage() for callers that only need the text.
+     *
      * @param list<array{role: string, content: string}> $messages
      *
      * @throws OpenAiException when the request fails or the response is unusable
      */
     public function chat(array $messages, float $temperature = 0.2): string
+    {
+        return $this->chatWithUsage($messages, $temperature)->content;
+    }
+
+    /**
+     * Send a chat completion request and return the text together with the
+     * model used and the token usage reported by the provider.
+     *
+     * @param list<array{role: string, content: string}> $messages
+     *
+     * @throws OpenAiException when the request fails or the response is unusable
+     */
+    public function chatWithUsage(array $messages, float $temperature = 0.2): OpenAiChatResult
     {
         try {
             $response = oeHttp::usingHeaders([
@@ -73,10 +89,17 @@ final class OpenAiChatClient
 
         $decoded = $response->json();
         $content = null;
+        $usage = TokenUsage::none();
+        $model = $this->config->model;
         if (is_array($decoded)) {
             $candidate = $decoded['choices'][0]['message']['content'] ?? null;
             if (is_string($candidate)) {
                 $content = trim($candidate);
+            }
+            $usage = TokenUsage::fromResponse($decoded);
+            $reportedModel = $decoded['model'] ?? null;
+            if (is_string($reportedModel) && $reportedModel !== '') {
+                $model = $reportedModel;
             }
         }
 
@@ -86,6 +109,6 @@ final class OpenAiChatClient
             throw new OpenAiException('The AI service returned an unexpected response.');
         }
 
-        return $content;
+        return new OpenAiChatResult($content, $model, $usage);
     }
 }

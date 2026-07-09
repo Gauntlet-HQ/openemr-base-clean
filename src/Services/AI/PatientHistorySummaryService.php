@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace OpenEMR\Services\AI;
 
+use OpenEMR\Services\AI\Observability\AiObservability;
 use OpenEMR\Services\EncounterService;
 use OpenEMR\Services\PatientIssuesService;
 use OpenEMR\Services\SocialHistoryService;
@@ -34,25 +35,33 @@ final class PatientHistorySummaryService
         . 'factual summary (2-4 sentences) highlighting the most clinically relevant points. '
         . 'Do not invent information that is not present. Do not include any patient identifiers.';
 
+    private const TRANSACTION_TYPE = 'patient_history_summary';
+
     private readonly OpenAiChatClient $chatClient;
     private readonly EncounterService $encounterService;
     private readonly SocialHistoryService $socialHistoryService;
     private readonly PatientIssuesService $issuesService;
+    private readonly AiObservability $observability;
 
     public function __construct(
         ?OpenAiChatClient $chatClient = null,
         ?EncounterService $encounterService = null,
         ?SocialHistoryService $socialHistoryService = null,
         ?PatientIssuesService $issuesService = null,
+        ?AiObservability $observability = null,
     ) {
         $this->chatClient = $chatClient ?? new OpenAiChatClient();
         $this->encounterService = $encounterService ?? new EncounterService();
         $this->socialHistoryService = $socialHistoryService ?? new SocialHistoryService();
         $this->issuesService = $issuesService ?? new PatientIssuesService();
+        $this->observability = $observability ?? new AiObservability();
     }
 
     /**
      * Summarize the most recent history for the given patient pid.
+     *
+     * Every call is instrumented: step timings, token usage, cost, and any
+     * failure are recorded to the observability ledger.
      *
      * @throws OpenAiException when the AI service is unavailable or errors
      */
@@ -62,30 +71,55 @@ final class PatientHistorySummaryService
             throw new \InvalidArgumentException('Patient pid must be a positive integer.');
         }
 
-        $encounter = $this->encounterService->getMostRecentEncounterForPatient($pid);
+        $transaction = $this->observability->begin(self::TRANSACTION_TYPE);
 
-        $socialHistory = $this->socialHistoryService->getHistoryData($pid);
-        $socialHistory = is_array($socialHistory) ? $socialHistory : [];
+        try {
+            $encounter = $transaction->measure(
+                'fetch_recent_encounter',
+                fn() => $this->encounterService->getMostRecentEncounterForPatient($pid),
+            );
 
-        $issuesResult = $this->issuesService->getActiveIssues($pid);
-        $issues = $issuesResult->hasData() ? $issuesResult->getData() : [];
+            $socialHistory = $transaction->measure(
+                'fetch_social_history',
+                fn() => $this->socialHistoryService->getHistoryData($pid),
+            );
+            $socialHistory = is_array($socialHistory) ? $socialHistory : [];
 
-        $hasHistory = $encounter !== null
-            || !empty($socialHistory['id'])
-            || $issues !== [];
+            $issues = $transaction->measure('fetch_active_issues', function () use ($pid) {
+                $issuesResult = $this->issuesService->getActiveIssues($pid);
 
-        if (!$hasHistory) {
-            return PatientHistorySummaryResult::newPatient();
+                return $issuesResult->hasData() ? $issuesResult->getData() : [];
+            });
+
+            $hasHistory = $encounter !== null
+                || !empty($socialHistory['id'])
+                || $issues !== [];
+
+            if (!$hasHistory) {
+                // No external call is made for a patient with no history.
+                $transaction->markSuccess();
+
+                return PatientHistorySummaryResult::newPatient();
+            }
+
+            $historyText = $this->buildHistoryText($encounter, $socialHistory, $issues);
+
+            $chatResult = $transaction->measure('openai_chat', fn(): OpenAiChatResult => $this->chatClient->chatWithUsage([
+                ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
+                ['role' => 'user', 'content' => $historyText],
+            ]));
+
+            $transaction->recordUsage($chatResult->model, $chatResult->usage);
+            $transaction->markSuccess();
+
+            return PatientHistorySummaryResult::fromSummary($chatResult->content);
+        } catch (\Throwable $e) {
+            $transaction->markFailure($e);
+
+            throw $e;
+        } finally {
+            $transaction->commit();
         }
-
-        $historyText = $this->buildHistoryText($encounter, $socialHistory, $issues);
-
-        $summary = $this->chatClient->chat([
-            ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
-            ['role' => 'user', 'content' => $historyText],
-        ]);
-
-        return PatientHistorySummaryResult::fromSummary($summary);
     }
 
     /**
