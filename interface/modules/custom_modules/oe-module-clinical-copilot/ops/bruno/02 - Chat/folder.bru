@@ -1,0 +1,13 @@
+meta {
+  name: 02 - Chat
+  seq: 3
+}
+
+docs {
+  `POST chat.php` (U11) -- session start, one turn, and re-seed. Real
+  file: `public/chat.php`. There is no GET view on this endpoint (ARCHITECTURE.md
+  §1.3); every action is a CSRF-checked POST. Run "00 - Auth Bootstrap"
+  and "01 - Synthesis Doc / 1 - Get Doc (view)" first (a chat session can
+  only start once a synthesis doc exists for the patient -- `startSession`
+  returns `ok:false` otherwise).
+}

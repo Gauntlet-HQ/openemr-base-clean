@@ -1,0 +1,56 @@
+meta {
+  name: 1 - Poll Status
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/status.php?cid={{correlation_id}}
+  body: none
+  auth: none
+}
+
+query {
+  cid: {{correlation_id}}
+}
+
+docs {
+  Reads the SAME trace spans the turn in "02 - Chat / 2 - Submit Turn"
+  already wrote (I12) -- this is the progress feed a client polls when
+  SSE is unavailable/buffered, not a second execution engine. Because the
+  reference request above is synchronous, by the time this runs the turn
+  has already finished server-side, so this should come back `done: true`
+  with the same turn payload `chat.php` returned.
+
+  Example response once the turn has landed:
+  ```json
+  {
+    "ok": true,
+    "done": true,
+    "spans": [ { "kind": "extract", "status": "ok", "duration_ms": 42 }, ... ],
+    "turn": {
+      "verify_status": "passed",
+      "degraded_message": null,
+      "frozen": false,
+      "claims": [ ... ],
+      "verdicts": [ ... ]
+    }
+  }
+  ```
+  Before the assistant turn lands (or for an unknown/not-yet-started
+  correlation id): `{ "ok": true, "done": false, "spans": [...], "turn": null }`
+  -- itself not an error (ARCHITECTURE.md §1.3: the client may poll before
+  the turn's row exists yet).
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("well-formed poll response", function () {
+    const data = res.getBody();
+    expect(data.ok).to.equal(true);
+    expect(data).to.have.property("done");
+    expect(data).to.have.property("spans");
+  });
+}

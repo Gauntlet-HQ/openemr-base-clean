@@ -1,0 +1,56 @@
+meta {
+  name: 2 - Ready
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/ready.php
+  body: none
+  auth: none
+}
+
+docs {
+  Genuine dependency probe -- DB round-trip, module tables writable
+  (INSERT+ROLLBACK probe), LLM reachability (Vertex countTokens),
+  worker heartbeat freshness, circuit-breaker state -- but REDACTED:
+  status enums only, no latencies/config/PHI (ARCHITECTURE.md §3.4).
+  Per-IP rate-limited (429 on abuse). This is the URL an external uptime
+  probe should hit as the dead-man switch for the worker cron
+  (see ops/README.md).
+
+  Example response, fully healthy:
+  ```json
+  {
+    "status": "ok",
+    "db": "ok",
+    "tables_writable": "ok",
+    "llm": "ok",
+    "worker_heartbeat": "ok",
+    "breaker": "closed"
+  }
+  ```
+  In this sandbox / a fresh dev stack with no Vertex ADC configured and no
+  cron wired up yet, expect `"status": "degraded"` with `"llm":
+  "unreachable"` and/or `"worker_heartbeat": "stale"` -- both are honest
+  DEGRADED-but-serving states (I6), not failures of this endpoint itself.
+  `"status": "error"` (HTTP 503) means a hard dependency (DB or module
+  tables) is actually down.
+}
+
+tests {
+  test("200 when ok/degraded, 503 when error", function () {
+    const data = res.getBody();
+    if (data.status === "error") {
+      expect(res.getStatus()).to.equal(503);
+    } else {
+      expect(res.getStatus()).to.equal(200);
+    }
+  });
+  test("every field is a reported enum, never missing", function () {
+    const data = res.getBody();
+    ["status", "db", "tables_writable", "llm", "worker_heartbeat", "breaker"].forEach(function (key) {
+      expect(data).to.have.property(key);
+    });
+  });
+}

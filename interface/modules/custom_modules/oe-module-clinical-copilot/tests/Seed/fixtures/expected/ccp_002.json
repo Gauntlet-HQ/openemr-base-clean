@@ -1,0 +1,109 @@
+{
+    "pubpid": "CCP-002",
+    "pid": 2,
+    "label": "Overdue ACR with active pending order (reorder suppression) + late-arriving cholesterol",
+    "facts": [
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "overdue_tests",
+            "capability_version": "1",
+            "kind": "overdue_item",
+            "pid": 2,
+            "clinical_date": "2025-06-07",
+            "date_source": "collected",
+            "value": null,
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 6,
+                    "field": null,
+                    "date_source": "collected"
+                }
+            ],
+            "note": "ACR last drawn 13 months ago (overdue, P1Y) but see the pending_order fact below: reorder note MUST be suppressed."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "pending_results",
+            "capability_version": "1",
+            "kind": "pending_order",
+            "pid": 2,
+            "clinical_date": "2026-07-05",
+            "date_source": "collected",
+            "value": null,
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_order",
+                    "pk": 7,
+                    "field": "order_status",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Drawn-but-unresulted order: activity=1, order_status=pending, no procedure_report/result rows. Never counts as a result; never resets the overdue clock (T10); composes with overdue_item above to suppress the reorder note."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 2,
+            "clinical_date": "2026-05-23",
+            "date_source": "collected",
+            "value": {
+                "raw": "210",
+                "parsed": 210.0,
+                "comparator": "none",
+                "unit_original": "mg/dL",
+                "unit_canonical": "mg/dL",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 7,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Late-arriving lab: clinical date (45 days ago) is older than this patient's other results already on file. Re-running the seed to add a row like this AFTER a digest exists is the E1 late-arrival eval (digest must change)."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 2,
+            "clinical_date": "2026-06-27",
+            "date_source": "collected",
+            "value": {
+                "raw": "6.9",
+                "parsed": 6.9,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 8,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Stable baseline A1c draw, more recent (10 days ago) than the late-arriving cholesterol (45 days ago) -- the two clinical dates are out of insertion order."
+        }
+    ]
+}

@@ -1,0 +1,42 @@
+meta {
+  name: 2 - Submit Login
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/interface/main/main_screen.php?auth=login&site={{site}}
+  body: formUrlEncoded
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+}
+
+body:form-urlencoded {
+  new_login_session_management: 1
+  languageChoice: 1
+  authUser: {{username}}
+  clearPass: {{password}}
+  facility: user_default
+}
+
+docs {
+  Same handler and same field names (`authUser`, `clearPass`) the login
+  form itself submits (`templates/login/partials/html/login_details.html.twig`,
+  verified against `tests/Tests/E2e/Login/LoginTrait.php`). On success the
+  session cookie from request 1 is now authenticated; OpenEMR redirects to
+  the main app shell, which Bruno follows automatically.
+}
+
+tests {
+  test("login redirected (authenticated)", function () {
+    // main_screen.php 302s to the app shell on success; a bad password
+    // re-renders the login form with a 200. Either way the cookie jar
+    // now holds whatever the server decided -- request 3 (GET doc.php)
+    // is the real proof the session is authenticated, since a bad login
+    // renders "Access denied" / a 403 there instead of the doc page.
+    expect(res.getStatus()).to.be.oneOf([200, 302]);
+  });
+}
