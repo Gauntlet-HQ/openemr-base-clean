@@ -1,0 +1,74 @@
+{#
+# Clinical Co-Pilot -- Week 2 Labs tab (upload a lab PDF or enter labs manually).
+#
+# Autoescape is globally OFF (build-notes.md) -- explicit |text/|attr/|xlt.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Labs — Clinical Co-Pilot"|xlt }}</title>
+    {{ setupHeader() }}
+</head>
+<body class="body_top">
+{# OpenEMR's tab bar labels a tab from the first .title element in the
+   loaded page (interface/main/tabs/js/custom_bindings.js); without one
+   the tab reads "Unknown". Hidden: the visible layout has its own heading. #}
+<span class="title" style="display: none">{{ "Co-Pilot Labs"|xlt }}</span>
+<div class="container-fluid mt-3" style="max-width: 820px;">
+    <div class="d-flex align-items-center justify-content-between mb-1">
+        <h3 class="mb-0">{{ "Add Labs"|xlt }}</h3>
+        <a href="{{ doc_url|attr }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-arrow-left mr-1"></i>{{ "Back to Co-Pilot"|xlt }}
+        </a>
+    </div>
+    <p class="text-muted">{{ "Upload a scanned lab report to have the co-pilot extract results, or enter results by hand. Either way you verify every value before it is locked into the chart."|xlt }}</p>
+
+    {% if error %}
+        <div class="alert alert-warning" role="alert">{{ error|text }}</div>
+    {% endif %}
+
+    <div class="card-deck">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ "Upload a lab report"|xlt }}</h5>
+                {% if not llm_configured %}
+                    <p class="small text-muted">{{ "No document model is configured — uploads land as a blank draft you complete by hand."|xlt }}</p>
+                {% endif %}
+                <form method="POST" action="{{ post_url|attr }}" enctype="multipart/form-data">
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="upload">
+                    <input type="hidden" name="pid" value="{{ pid|attr }}">
+                    <div class="form-group">
+                        <input type="file" class="form-control-file" name="document"
+                               accept="application/pdf,image/png,image/jpeg,image/webp">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-upload mr-1"></i>{{ "Upload & extract"|xlt }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ "Enter labs manually"|xlt }}</h5>
+                <p class="small text-muted">{{ "Start an empty draft and type results in on the next screen."|xlt }}</p>
+                <form method="POST" action="{{ post_url|attr }}">
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="manual">
+                    <input type="hidden" name="pid" value="{{ pid|attr }}">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fa fa-keyboard-o mr-1"></i>{{ "Enter manually"|xlt }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

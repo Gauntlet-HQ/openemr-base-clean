@@ -1,0 +1,166 @@
+{#
+# Clinical Co-Pilot -- Maintenance: knowledge-base document ingestion.
+#
+# Three server-rendered views keyed by `view`: the upload form, the chunk
+# review (before commit), and the result. Autoescape is globally OFF for this
+# project -- every dynamic value is explicitly escaped with |text/|attr/|xlt.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Clinical Co-Pilot -- Knowledge base"|xlt }}</title>
+    {{ setupHeader() }}
+</head>
+<body class="body_top">
+{# OpenEMR's tab bar labels a tab from the first .title element in the
+   loaded page (interface/main/tabs/js/custom_bindings.js); without one
+   the tab reads "Unknown". Hidden: the visible layout has its own heading. #}
+<span class="title" style="display: none">{{ "Knowledge Base (RAG)"|xlt }}</span>
+<div class="container-fluid mt-3" style="max-width: 900px;">
+    <h4><i class="fa fa-book mr-2"></i>{{ "Knowledge base -- add a document"|xlt }}</h4>
+    <p class="text-muted">
+        {{ "Upload a guideline or reference document; it is chunked and stored in the RAG knowledge database the summarizer cites. This store holds general medical knowledge only -- never patient data."|xlt }}
+    </p>
+
+    {% if view == 'form' %}
+        {% if knowledge.state == 'ok' %}
+            <div class="alert alert-info py-2">{{ "Knowledge store connected"|xlt }} &middot; {{ knowledge.chunk_count }} {{ "chunks currently loaded"|xlt }}.</div>
+        {% elseif knowledge.state == 'unreachable' %}
+            <div class="alert alert-warning py-2">{{ "The knowledge store is configured but not responding. Ingestion will fail until it is reachable."|xlt }}</div>
+        {% elseif knowledge.state == 'driver_missing' %}
+            <div class="alert alert-warning py-2">{{ "The knowledge database IS configured, but the PostgreSQL PHP driver (pdo_pgsql) is not loaded in the web server process. It is likely enabled only for the CLI (so seeding and check.php pass) but not for Apache/mod_php. Enable pdo_pgsql for the web SAPI and reload — no env change is needed."|xlt }}</div>
+        {% else %}
+            <div class="alert alert-warning py-2">{{ "No knowledge database is configured, so there is nowhere to write. Set CLINICAL_COPILOT_KNOWLEDGE_DATABASE_URL first (see docs/knowledge-base.md)."|xlt }}</div>
+        {% endif %}
+
+        {% if error %}<div class="alert alert-danger" role="alert">{{ error|text }}</div>{% endif %}
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ post_url|attr }}" enctype="multipart/form-data">
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="preview">
+
+                    <div class="form-row">
+                        <div class="form-group col-md-7">
+                            <label for="kbSource">{{ "Source / citation label"|xlt }} <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="kbSource" name="source" required
+                                   placeholder="{{ 'e.g. ADA Standards of Care 2026'|attr }}">
+                            <small class="form-text text-muted">{{ "Shown as the citation, and the key used to replace this document on re-upload."|xlt }}</small>
+                        </div>
+                        <div class="form-group col-md-5">
+                            <label for="kbTitle">{{ "Title"|xlt }}</label>
+                            <input type="text" class="form-control" id="kbTitle" name="title"
+                                   placeholder="{{ 'e.g. Glycemic targets'|attr }}">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-5">
+                            <label for="kbSection">{{ "Default section"|xlt }}</label>
+                            <input type="text" class="form-control" id="kbSection" name="section"
+                                   placeholder="{{ 'optional; headings in the doc override this'|attr }}">
+                        </div>
+                        <div class="form-group col-md-7">
+                            <label for="kbTags">{{ "Tags"|xlt }}</label>
+                            <input type="text" class="form-control" id="kbTags" name="tags"
+                                   placeholder="{{ 'comma-separated, e.g. a1c, lipids'|attr }}">
+                            <small class="form-text text-muted">{{ "Applied to every chunk; analyte keywords found in the text are added automatically."|xlt }}</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="kbChunk">{{ "Chunk size (characters)"|xlt }}</label>
+                            <input type="number" class="form-control" id="kbChunk" name="chunk_size"
+                                   value="{{ default_chunk_size }}" min="{{ min_chunk_size }}" max="{{ max_chunk_size }}" step="50">
+                            <small class="form-text text-muted">{{ "Set per document: smaller for dense tables, larger for prose."|xlt }}</small>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="kbOverlap">{{ "Overlap (characters)"|xlt }}</label>
+                            <input type="number" class="form-control" id="kbOverlap" name="overlap"
+                                   value="{{ default_overlap }}" min="0" step="20">
+                            <small class="form-text text-muted">{{ "Trailing text carried into the next chunk."|xlt }}</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="kbFile">{{ "Document"|xlt }}</label>
+                        <input type="file" class="form-control-file" id="kbFile" name="document"
+                               accept=".txt,.md,.markdown,.html,.htm,application/pdf,image/png,image/jpeg,image/webp,text/plain,text/markdown,text/html">
+                        <small class="form-text text-muted">
+                            {{ "Text, Markdown, HTML, PDF, or image"|xlt }}{% if max_mb %} &middot; {{ "max"|xlt }} {{ max_mb }} MB{% endif %}.
+                            {% if not llm_configured %}<span class="text-warning">{{ "PDF/image reading needs the model (not configured) -- paste text or upload .txt/.md instead."|xlt }}</span>{% endif %}
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="kbPaste">{{ "...or paste text"|xlt }}</label>
+                        <textarea class="form-control" id="kbPaste" name="pasted_text" rows="6"
+                                  placeholder="{{ 'Paste the guideline text here if you do not have a file.'|attr }}"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-search mr-1"></i>{{ "Preview chunks"|xlt }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    {% elseif view == 'review' %}
+        <div class="alert alert-secondary">
+            {{ "Review the"|xlt }} <strong>{{ chunk_count }}</strong> {{ "chunks below, then commit them to the knowledge base."|xlt }}
+            {{ "Source"|xlt }}: <strong>{{ source|text }}</strong>{% if title %} &middot; {{ title|text }}{% endif %}
+        </div>
+
+        <div class="card mb-3">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead><tr>
+                        <th>#</th><th>{{ "Section"|xlt }}</th><th>{{ "Tags"|xlt }}</th><th>{{ "Chars"|xlt }}</th><th>{{ "Excerpt"|xlt }}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for c in chunks %}
+                        <tr>
+                            <td class="text-muted">{{ loop.index }}</td>
+                            <td>{{ c.section|text }}</td>
+                            <td>{% for t in c.tags %}<span class="badge badge-light border">{{ t|text }}</span> {% endfor %}</td>
+                            <td class="text-muted">{{ c.chars }}</td>
+                            <td><small>{{ c.excerpt|text }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ post_url|attr }}">
+            {{ csrfToken('default', 'csrf_token_form') }}
+            <input type="hidden" name="action" value="commit">
+            <input type="hidden" name="chunks_json" value="{{ chunks_json|attr }}">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="replace_existing" value="1" id="kbReplace" checked>
+                <label class="form-check-label" for="kbReplace">
+                    {{ "Replace any existing chunks from this source"|xlt }}
+                </label>
+            </div>
+            <button type="submit" class="btn btn-success"><i class="fa fa-check mr-1"></i>{{ "Commit to knowledge base"|xlt }}</button>
+            <a href="{{ post_url|attr }}" class="btn btn-outline-secondary ml-2">{{ "Start over"|xlt }}</a>
+        </form>
+
+    {% else %}
+        <div class="alert alert-success">
+            <i class="fa fa-check-circle mr-1"></i>
+            {{ "Wrote"|xlt }} <strong>{{ written }}</strong> {{ "chunks for"|xlt }} <strong>{{ source|text }}</strong> {{ "to the knowledge base."|xlt }}
+            {% if knowledge.state == 'ok' %} {{ "The store now holds"|xlt }} {{ knowledge.chunk_count }} {{ "chunks."|xlt }}{% endif %}
+        </div>
+        <a href="{{ post_url|attr }}" class="btn btn-primary"><i class="fa fa-plus mr-1"></i>{{ "Add another document"|xlt }}</a>
+    {% endif %}
+</div>
+</body>
+</html>

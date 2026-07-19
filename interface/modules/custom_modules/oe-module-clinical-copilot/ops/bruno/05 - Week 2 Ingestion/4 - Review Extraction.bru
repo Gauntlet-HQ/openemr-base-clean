@@ -1,0 +1,27 @@
+meta {
+  name: 4 - Review Extraction
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/extraction_review.php?extraction_id={{extraction_id}}
+  auth: none
+}
+
+query {
+  extraction_id: {{extraction_id}}
+}
+
+docs {
+  The verify surface for a draft extraction: each extracted value beside its
+  page/quote citation and the source map, editable until locked. Set
+  `extraction_id` from the upload redirect first.
+}
+
+tests {
+  test("renders the review page", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.include("Verify");
+  });
+}

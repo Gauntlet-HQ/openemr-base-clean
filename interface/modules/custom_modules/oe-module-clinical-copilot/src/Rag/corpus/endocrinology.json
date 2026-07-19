@@ -1,0 +1,176 @@
+{
+    "_comment": "Small, PHI-free clinical-guideline corpus for the outpatient endocrinology co-pilot. Paraphrased summaries of widely-published general targets for demo/eval use; each chunk is the office's agreed practice, not patient data. Reproducible from source control. Replace or extend with your site's own agreed guidance.",
+    "chunks": [
+        {
+            "id": "ada-a1c-target",
+            "title": "Glycemic target: A1c goal for most adults",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Glycemic Targets",
+            "text": "For most non-pregnant adults with type 2 diabetes, a reasonable A1c goal is below 7%. Less stringent goals (for example below 8%) may be appropriate for patients with limited life expectancy, extensive comorbidities, or a history of severe hypoglycemia. If A1c is above target, reassess the regimen and consider intensifying therapy.",
+            "tags": ["a1c", "glycemic", "diabetes"],
+            "url": null
+        },
+        {
+            "id": "ada-a1c-monitoring",
+            "title": "A1c monitoring cadence",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Assessment",
+            "text": "Assess A1c at least twice per year in patients meeting treatment goals and with stable glycemic control, and quarterly in patients whose therapy has changed or who are not meeting glycemic goals.",
+            "tags": ["a1c", "monitoring", "cadence"],
+            "url": null
+        },
+        {
+            "id": "ada-lipid-statin",
+            "title": "Lipid management and statin therapy in diabetes",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Cardiovascular Risk",
+            "text": "For patients with diabetes aged 40 to 75 without established cardiovascular disease, moderate-intensity statin therapy is recommended in addition to lifestyle measures. High-intensity statin therapy is recommended for those with established atherosclerotic cardiovascular disease or multiple risk factors. LDL cholesterol reduction is the primary target of therapy.",
+            "tags": ["lipids", "cholesterol", "ldl", "statin", "cardiovascular"],
+            "url": null
+        },
+        {
+            "id": "ada-triglycerides",
+            "title": "Elevated triglycerides",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Cardiovascular Risk",
+            "text": "Fasting triglycerides of 150 mg/dL or higher warrant attention to lifestyle factors and glycemic control. Severe hypertriglyceridemia (500 mg/dL or higher) raises pancreatitis risk and may warrant pharmacologic therapy.",
+            "tags": ["triglycerides", "lipids"],
+            "url": null
+        },
+        {
+            "id": "ada-uacr-screening",
+            "title": "Kidney screening: urine albumin-to-creatinine ratio",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Kidney Disease",
+            "text": "Screen for diabetic kidney disease at least annually with a spot urine albumin-to-creatinine ratio (UACR) and an estimated glomerular filtration rate. A UACR of 30 mg/g or higher on two of three samples over a 3 to 6 month period indicates albuminuria and should prompt consideration of an ACE inhibitor or ARB.",
+            "tags": ["acr", "uacr", "kidney", "albuminuria", "egfr"],
+            "url": null
+        },
+        {
+            "id": "ada-blood-pressure",
+            "title": "Blood pressure target in diabetes",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Cardiovascular Risk",
+            "text": "For most adults with diabetes and hypertension, a blood pressure target below 130/80 mmHg is appropriate if it can be achieved safely. First-line agents that provide cardiovascular benefit include ACE inhibitors, ARBs, thiazide-like diuretics, and calcium channel blockers.",
+            "tags": ["blood_pressure", "hypertension", "bp"],
+            "url": null
+        },
+        {
+            "id": "ada-metformin-first-line",
+            "title": "First-line pharmacologic therapy",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Pharmacologic Therapy",
+            "text": "Metformin is the preferred initial pharmacologic agent for type 2 diabetes in the absence of contraindications. In patients with established cardiovascular disease, heart failure, or chronic kidney disease, an SGLT2 inhibitor or GLP-1 receptor agonist with proven benefit is recommended independent of A1c.",
+            "tags": ["metformin", "medications", "sglt2", "glp1", "diabetes"],
+            "url": null
+        },
+        {
+            "id": "ada-hypoglycemia",
+            "title": "Hypoglycemia assessment",
+            "source": "ADA Standards of Care (summary)",
+            "section": "Glycemic Targets",
+            "text": "Ask about symptomatic and asymptomatic hypoglycemia at each encounter for patients on insulin or sulfonylureas. Recurrent hypoglycemia should prompt reassessment and relaxation of glycemic targets where appropriate.",
+            "tags": ["hypoglycemia", "insulin", "sulfonylurea", "glycemic"],
+            "url": null
+        },
+        {
+            "id": "lit-metformin-first-line",
+            "title": "Metformin as first-line pharmacotherapy",
+            "source": "Weinberg Sibony R, Segev O, Dor S, Raz I. Drug Therapies for Diabetes. Int J Mol Sci. 2023;24(24):17147 (MDPI, CC BY 4.0)",
+            "section": "Metformin",
+            "text": "Metformin remains a cornerstone of type 2 diabetes treatment and is recommended as the primary, first-line oral drug across all age groups, owing to its glucose-lowering efficacy, ease of combination with other agents, low cost, low risk of hypoglycemia, and modest weight reduction.",
+            "tags": ["metformin", "medications", "diabetes", "a1c"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10742594/"
+        },
+        {
+            "id": "lit-glp1-cardio-weight",
+            "title": "GLP-1 receptor agonists: glycemic, weight, and cardiovascular benefit",
+            "source": "Weinberg Sibony R, Segev O, Dor S, Raz I. Drug Therapies for Diabetes. Int J Mol Sci. 2023;24(24):17147 (MDPI, CC BY 4.0)",
+            "section": "GLP-1 Receptor Agonists",
+            "text": "GLP-1 receptor agonists produce substantial HbA1c and body-weight reduction and, in cardiovascular outcome trials, significant cardiovascular benefit. Their most common adverse effects are gastrointestinal, affecting more than a third of patients.",
+            "tags": ["glp1", "medications", "cardiovascular", "a1c"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10742594/"
+        },
+        {
+            "id": "lit-sglt2-cardiorenal",
+            "title": "SGLT2 inhibitors: glucose lowering with cardiorenal benefit",
+            "source": "Mlynarska E, et al. Type 2 Diabetes Mellitus: New Pathogenetic Mechanisms, Treatment and the Most Important Complications. Int J Mol Sci. 2025;26(3):1094 (MDPI, CC BY 4.0)",
+            "section": "SGLT2 Inhibitors",
+            "text": "SGLT2 inhibitors lower HbA1c by roughly 0.5 to 0.9%, reduce systolic blood pressure by about 2.5 to 5 mmHg, and cause modest weight loss. Beyond glucose lowering they reduce progression of chronic kidney disease and cardiovascular complications. They can be initiated when the estimated glomerular filtration rate exceeds 60 mL/min/1.73m2 and should be re-evaluated if it falls to 45.",
+            "tags": ["sglt2", "medications", "kidney", "egfr", "cardiovascular"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11817707/"
+        },
+        {
+            "id": "lit-dkd-screening",
+            "title": "Diabetic kidney disease: screen at diagnosis",
+            "source": "Mlynarska E, et al. Type 2 Diabetes Mellitus: New Pathogenetic Mechanisms, Treatment and the Most Important Complications. Int J Mol Sci. 2025;26(3):1094 (MDPI, CC BY 4.0)",
+            "section": "Complications: Diabetic Kidney Disease",
+            "text": "Diabetic kidney disease develops in about 40% of people with type 2 diabetes and is the most common form of chronic kidney disease. Testing should be performed at the time of diabetes diagnosis. Primary prevention rests on glycemic control, blood-pressure control, treatment of dyslipidemia, and lifestyle change; agents used include SGLT2 inhibitors, GLP-1 receptor agonists, statins, and ACE inhibitors.",
+            "tags": ["kidney", "nephropathy", "albuminuria", "egfr"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11817707/"
+        },
+        {
+            "id": "lit-neuropathy-screening",
+            "title": "Diabetic neuropathy: screen at diagnosis",
+            "source": "Mlynarska E, et al. Type 2 Diabetes Mellitus: New Pathogenetic Mechanisms, Treatment and the Most Important Complications. Int J Mol Sci. 2025;26(3):1094 (MDPI, CC BY 4.0)",
+            "section": "Complications: Neuropathy",
+            "text": "Neuropathy is the most common complication of diabetes, affecting nearly 45% of patients, with distal symmetric polyneuropathy the most frequent form. Testing should occur at the time of type 2 diabetes diagnosis, and good glycemic control helps prevent or slow progression. Symptomatic options include gabapentin, pregabalin, duloxetine, and tricyclic antidepressants.",
+            "tags": ["neuropathy", "glycemic", "diabetes"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11817707/"
+        },
+        {
+            "id": "lit-retinopathy-duration",
+            "title": "Diabetic retinopathy and disease duration",
+            "source": "Mlynarska E, et al. Type 2 Diabetes Mellitus: New Pathogenetic Mechanisms, Treatment and the Most Important Complications. Int J Mol Sci. 2025;26(3):1094 (MDPI, CC BY 4.0)",
+            "section": "Complications: Diabetic Retinopathy",
+            "text": "Diabetic retinopathy is a leading cause of vision loss; up to 60% of people with type 2 diabetes develop it after 20 years, and disease duration is the most important risk factor. Treatments include panretinal laser photocoagulation, intravitreal anti-VEGF injection, and vitrectomy.",
+            "tags": ["retinopathy", "diabetes"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11817707/"
+        },
+        {
+            "id": "lit-t2dm-diagnostic-criteria",
+            "title": "Diagnostic criteria for type 2 diabetes",
+            "source": "Mlynarska E, et al. Type 2 Diabetes Mellitus: New Pathogenetic Mechanisms, Treatment and the Most Important Complications. Int J Mol Sci. 2025;26(3):1094 (MDPI, CC BY 4.0)",
+            "section": "Diagnosis",
+            "text": "By ADA criteria, type 2 diabetes in non-pregnant adults is diagnosed by an HbA1c of 6.5% or higher, fasting plasma glucose of 126 mg/dL or higher, a 2-hour plasma glucose of 200 mg/dL or higher on a 75 g oral glucose tolerance test, or a random glucose of 200 mg/dL or higher with hyperglycemic symptoms. Equivocal results should be confirmed by repeat testing.",
+            "tags": ["a1c", "glucose", "diabetes"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11817707/"
+        },
+        {
+            "id": "lit-subclinical-hypothyroid-threshold",
+            "title": "Subclinical hypothyroidism: when to treat",
+            "source": "Calissendorff J, Falhammar H. To Treat or Not to Treat Subclinical Hypothyroidism, What Is the Evidence? Medicina (Kaunas). 2020;56(1):40 (MDPI, CC BY 4.0)",
+            "section": "When to initiate levothyroxine",
+            "text": "Subclinical hypothyroidism is a laboratory diagnosis: a raised TSH (5 to 10 mIU/L) with a normal free T4, or a TSH above 10 mIU/L in more severe forms. Most guidelines indicate treatment when TSH exceeds 10 mIU/L; in milder forms a wait-and-see strategy is advocated, and lifelong levothyroxine should normally be reserved for manifest hypothyroidism.",
+            "tags": ["thyroid", "tsh", "t4", "monitoring"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7022757/"
+        },
+        {
+            "id": "lit-hypothyroid-repeat-tsh",
+            "title": "Repeat TSH before starting levothyroxine",
+            "source": "Calissendorff J, Falhammar H. To Treat or Not to Treat Subclinical Hypothyroidism, What Is the Evidence? Medicina (Kaunas). 2020;56(1):40 (MDPI, CC BY 4.0)",
+            "section": "Confirming the diagnosis",
+            "text": "Before starting levothyroxine for subclinical hypothyroidism, TSH should be repeated within 3 months, because a transient elevation that normalizes within 3 months has been reported in about 60% of cases. Acute illness, thyroiditis, recent amiodarone, macro-TSH, and heterophilic antibodies can also falsely raise TSH.",
+            "tags": ["thyroid", "tsh", "monitoring"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7022757/"
+        },
+        {
+            "id": "lit-hypothyroid-overtreatment",
+            "title": "Levothyroxine overtreatment risk in older adults",
+            "source": "Calissendorff J, Falhammar H. To Treat or Not to Treat Subclinical Hypothyroidism, What Is the Evidence? Medicina (Kaunas). 2020;56(1):40 (MDPI, CC BY 4.0)",
+            "section": "Overtreatment risk",
+            "text": "Overtreatment with levothyroxine, especially in older patients, suppresses TSH and raises the risk of atrial fibrillation, heart failure, ischemic heart disease, and fractures; supraphysiological doses aiming at a suppressed TSH have been associated with increased cardiovascular and all-cause mortality. A stable, mildly raised TSH in an older adult (for example 6 mIU/L at age 70) does not by itself merit treatment.",
+            "tags": ["thyroid", "tsh", "cardiovascular"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7022757/"
+        },
+        {
+            "id": "lit-thyroid-nodule-ultrasound",
+            "title": "Ultrasound risk stratification of thyroid nodules",
+            "source": "Tumino D, et al. Nodular Thyroid Disease in the Era of Precision Medicine. Front Endocrinol (Lausanne). 2020;10:907 (CC BY 4.0)",
+            "section": "The key role of ultrasound",
+            "text": "Neck ultrasound is the primary tool for evaluating thyroid nodules and stratifying malignancy risk, guiding the decision to perform fine-needle aspiration. Standardized systems (ATA, ACR-TIRADS, EU-TIRADS, K-TIRADS, AACE/ACE/AME) combine features such as echogenicity, composition, margins, microcalcifications, and shape, and give higher interobserver agreement than single features.",
+            "tags": ["thyroid", "monitoring"],
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6989479/"
+        }
+    ]
+}

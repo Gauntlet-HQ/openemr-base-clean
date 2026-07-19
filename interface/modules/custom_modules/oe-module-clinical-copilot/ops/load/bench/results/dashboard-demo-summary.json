@@ -1,0 +1,101 @@
+{
+    "generated_at": "2026-07-13T22:15:35+00:00",
+    "thresholds": {
+        "p95_latency_ms": 15000,
+        "error_rate_pct": 5,
+        "tool_failure_rate_pct": 2,
+        "verification_failure_rate_pct": 10,
+        "eval_window_minutes": 15
+    },
+    "scenarios": {
+        "healthy": {
+            "file": "\/home\/user\/openemr-base-clean\/interface\/modules\/custom_modules\/oe-module-clinical-copilot\/ops\/load\/bench\/results\/dashboard-healthy.html",
+            "fired": [],
+            "overview": {
+                "total_spans": 748,
+                "error_count": 1,
+                "error_rate_pct": 0.13,
+                "latency_by_kind": {
+                    "chat_turn": {
+                        "count": 120,
+                        "p50": 6074,
+                        "p95": 10109,
+                        "p99": 10395,
+                        "error_rate": 0
+                    },
+                    "render": {
+                        "count": 308,
+                        "p50": 88,
+                        "p95": 148,
+                        "p99": 5676,
+                        "error_rate": 0
+                    },
+                    "tool_call": {
+                        "count": 200,
+                        "p50": 116,
+                        "p95": 187,
+                        "p99": 198,
+                        "error_rate": 0.5
+                    },
+                    "verify": {
+                        "count": 120,
+                        "p50": 3,
+                        "p95": 5,
+                        "p99": 5,
+                        "error_rate": 0
+                    }
+                },
+                "tokens_in": 156000,
+                "tokens_out": 36000,
+                "cost_usd": 0.555
+            }
+        },
+        "incident": {
+            "file": "\/home\/user\/openemr-base-clean\/interface\/modules\/custom_modules\/oe-module-clinical-copilot\/ops\/load\/bench\/results\/dashboard-incident.html",
+            "fired": [
+                "wrong_patient_v3_trip",
+                "p95_latency",
+                "error_rate",
+                "tool_failure_rate"
+            ],
+            "overview": {
+                "total_spans": 721,
+                "error_count": 53,
+                "error_rate_pct": 7.35,
+                "latency_by_kind": {
+                    "chat_turn": {
+                        "count": 121,
+                        "p50": 16942,
+                        "p95": 25776,
+                        "p99": 26577,
+                        "error_rate": 33.88
+                    },
+                    "render": {
+                        "count": 280,
+                        "p50": 114,
+                        "p95": 173,
+                        "p99": 179,
+                        "error_rate": 0
+                    },
+                    "tool_call": {
+                        "count": 200,
+                        "p50": 129,
+                        "p95": 211,
+                        "p99": 217,
+                        "error_rate": 6
+                    },
+                    "verify": {
+                        "count": 120,
+                        "p50": 3,
+                        "p95": 5,
+                        "p99": 5,
+                        "error_rate": 0
+                    }
+                },
+                "tokens_in": 156000,
+                "tokens_out": 36000,
+                "cost_usd": 0.555
+            }
+        }
+    }
+}

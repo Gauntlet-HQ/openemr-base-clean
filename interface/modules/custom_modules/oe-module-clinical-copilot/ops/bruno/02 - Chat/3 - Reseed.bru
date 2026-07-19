@@ -1,0 +1,47 @@
+meta {
+  name: 3 - Reseed
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/chat.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  action: reseed
+  pid: {{pid}}
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  One-click re-seed for a stale session (T19: the chart changed since the
+  summary was generated -- the chat panel shows a banner with this action
+  behind the link). Starts a fresh session from the CURRENT synthesis;
+  does not resume or mutate the old one (sessions are otherwise
+  immutable once frozen/expired).
+
+  Example success response:
+  ```json
+  { "ok": true, "session_id": 43, "reason": null }
+  ```
+}
+
+script:post-response {
+  const data = res.getBody();
+  if (data && data.ok && data.session_id) {
+    bru.setVar("session_id", data.session_id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("re-seeded a session", function () {
+    const data = res.getBody();
+    expect(data.ok, data.reason || "").to.equal(true);
+  });
+}

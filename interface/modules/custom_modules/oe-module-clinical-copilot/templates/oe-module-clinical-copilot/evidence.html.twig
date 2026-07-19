@@ -1,0 +1,78 @@
+{#
+# Clinical Co-Pilot -- Week 2 guideline evidence.
+#
+# Cited clinical-guideline evidence grouped by topic, retrieved deterministically
+# from the committed corpus. Rendered as its OWN surface, separate from the
+# verified patient-fact narrative -- guideline evidence and patient-record facts
+# never share a citation type. Autoescape is globally OFF (build-notes.md);
+# explicit |text/|attr/|xlt.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Guideline Evidence — Clinical Co-Pilot"|xlt }}</title>
+    {{ setupHeader() }}
+    <style>
+        .ccp-topic-chip { display:inline-block; margin:0 .35rem .35rem 0; }
+        .ccp-evi-card { border-left: 4px solid #7a5bd6; }
+        .ccp-evi-source { font-size:.8rem; color:#6c757d; }
+        .ccp-evi-quote { font-size:.92rem; }
+    </style>
+</head>
+<body class="body_top">
+<div class="container-fluid mt-3" style="max-width: 900px;">
+    <div class="d-flex align-items-center justify-content-between mb-1">
+        <h3 class="mb-0">{{ "Guideline Evidence"|xlt }}</h3>
+        {% if pid > 0 %}
+            <a href="{{ doc_url|attr }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fa fa-arrow-left mr-1"></i>{{ "Back to Co-Pilot"|xlt }}
+            </a>
+        {% endif %}
+    </div>
+    <p class="text-muted">
+        {{ "Agreed clinical-practice guidance for the topics below, retrieved and cited from the office corpus. This is general guideline evidence — shown separately from the patient's own chart facts."|xlt }}
+    </p>
+
+    {# Topic filter: each chip links to the page with that single topic selected;
+       an "All" chip clears the filter. #}
+    <div class="mb-3">
+        <a href="{{ evidence_url|attr }}?pid={{ pid|attr }}"
+           class="btn btn-sm ccp-topic-chip {{ selected|length == topics|length ? 'btn-primary' : 'btn-outline-primary' }}">
+            {{ "All"|xlt }}
+        </a>
+        {% for t in topics %}
+            <a href="{{ evidence_url|attr }}?pid={{ pid|attr }}&topics={{ t.key|attr }}"
+               class="btn btn-sm ccp-topic-chip {{ (selected|length == 1 and selected[0] == t.key) ? 'btn-primary' : 'btn-outline-primary' }}">
+                {{ t.label|text }}
+            </a>
+        {% endfor %}
+    </div>
+
+    {% for group in groups %}
+        <h5 class="mt-3">{{ group.label|text }}</h5>
+        {% if group.snippets is empty %}
+            <p class="text-muted small">{{ "No matching guideline in the corpus."|xlt }}</p>
+        {% else %}
+            {% for s in group.snippets %}
+                <div class="card ccp-evi-card mb-2">
+                    <div class="card-body py-2">
+                        <div class="font-weight-bold">{{ s.chunk.title|text }}</div>
+                        <div class="ccp-evi-quote">{{ s.chunk.text|text }}</div>
+                        <div class="ccp-evi-source mt-1">
+                            <i class="fa fa-book mr-1"></i>{{ s.citation.sourceId|text }}
+                            {% if s.chunk.section %} · {{ s.chunk.section|text }}{% endif %}
+                            {% if s.chunk.url %} · <a href="{{ s.chunk.url|attr }}" target="_blank" rel="noopener">{{ "source"|xlt }}</a>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+</div>
+</body>
+</html>

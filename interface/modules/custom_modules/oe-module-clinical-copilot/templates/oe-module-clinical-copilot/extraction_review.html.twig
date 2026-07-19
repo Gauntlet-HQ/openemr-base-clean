@@ -1,0 +1,487 @@
+{#
+# Clinical Co-Pilot -- Week 2 extraction review (verify -> edit -> lock).
+#
+# The human half of Week 2: every extracted value is shown beside what the
+# model proposed, editable until the extraction is locked. Locking commits the
+# verified values to the chart and records extraction accuracy (accepted vs
+# edited). Autoescape is globally OFF (build-notes.md) -- explicit escaping.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Verify Extraction — Clinical Co-Pilot"|xlt }}</title>
+    {{ setupHeader() }}
+    <style>
+        .ccp-edited { color: #b8860b; }
+        .ccp-model-said { font-size: 0.85em; color: #6c757d; }
+        .ccp-cite { font-size: 0.85em; }
+        .ccp-source-frame { width: 100%; height: 100%; min-height: 520px; border: 1px solid #ced4da; border-radius: .25rem; background: #fff; }
+        .ccp-accuracy { font-variant-numeric: tabular-nums; }
+        /* pdf.js citation overlay (progressive upgrade over the iframe viewer) */
+        .ccp-canvas-view { border: 1px solid #ced4da; border-radius: .25rem; background: #e9ecef; padding: 8px; }
+        .ccp-page-wrap { position: relative; margin: 0 auto 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+        .ccp-page-wrap:last-child { margin-bottom: 0; }
+        .ccp-page-wrap canvas { display: block; width: 100%; height: auto; }
+        .ccp-page-label { position: absolute; top: 2px; right: 4px; font-size: 11px; color: #6c757d; background: rgba(255,255,255,.75); padding: 0 4px; border-radius: 3px; }
+        .ccp-bbox { position: absolute; border: 2px solid #0d9488; background: rgba(13,148,136,.15); border-radius: 2px; cursor: pointer; }
+        .ccp-bbox-num { position: absolute; top: -2px; left: -2px; font-size: 11px; line-height: 1; padding: 1px 4px; color: #fff; background: #0d9488; border-radius: 2px 0 3px 0; }
+        .ccp-bbox.ccp-hot { border-color: #c17d1a; background: rgba(193,125,26,.35); }
+        .ccp-bbox.ccp-hot .ccp-bbox-num { background: #c17d1a; }
+        tr.ccp-row-hot > td { background-color: #f6ecd7; }
+        .ccp-cite-link { color: inherit; }
+        @media (min-width: 992px) {
+            .ccp-review-wrap { height: calc(100vh - 220px); }
+            .ccp-pane { height: 100%; overflow-y: auto; }
+            .ccp-pdf-pane { position: sticky; top: 0; }
+        }
+    </style>
+</head>
+<body class="body_top">
+{# OpenEMR's tab bar labels a tab from the first .title element in the
+   loaded page (interface/main/tabs/js/custom_bindings.js); without one
+   the tab reads "Unknown". Hidden: the visible layout has its own heading. #}
+<span class="title" style="display: none">{{ "Verify Extraction"|xlt }}</span>
+<div class="container-fluid mt-3">
+
+    {% if not found %}
+        <div class="alert alert-danger" role="alert">{{ "That extraction could not be found."|xlt }}</div>
+    {% else %}
+
+    {% if error %}
+        <div class="alert alert-warning" role="alert">{{ "That action could not be completed. Please try again."|xlt }}</div>
+    {% endif %}
+
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div>
+            <h3 class="mb-0">{{ "Verify"|xlt }} — {{ doc_type_label|text }}</h3>
+            <div class="ccp-model-said">
+                {% if model %}{{ "Extracted by"|xlt }} {{ model|text }}{% else %}{{ "Manual entry"|xlt }}{% endif %}
+            </div>
+        </div>
+        <div class="text-right">
+            {% if locked and is_medication_list %}
+                {# Medication lock freezes the verified transcription ONLY —
+                   never claim the chart got it (reconciliation is deferred). #}
+                <span class="badge badge-success p-2">{{ "Locked — verified (not in chart)"|xlt }}</span>
+            {% elseif locked %}
+                <span class="badge badge-success p-2">{{ "Locked — in chart"|xlt }}</span>
+            {% else %}
+                <span class="badge badge-warning p-2">{{ "Draft — verifying"|xlt }}</span>
+            {% endif %}
+            {% if field_accuracy is not null %}
+                <div class="ccp-model-said ccp-accuracy mt-1">
+                    {{ "Extraction accuracy"|xlt }}: {{ (field_accuracy * 100)|round(1) }}%
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# PHI-mixing guard: a lab report is uploaded onto THIS chart, but the file
+       names a patient. If the document-header name/DOB disagree, this may be the
+       wrong person's results — a loud, persistent alert on every review load
+       (mismatch = danger; could-not-confirm = warning; confirmed = quiet
+       reassurance). identity_status is null for non-lab / no-vision drafts. #}
+    {% if is_lab and identity_status == 'mismatch' %}
+        <div class="alert alert-danger" role="alert">
+            <h5 class="alert-heading mb-1"><i class="fa fa-exclamation-triangle mr-1"></i>{{ "Patient identity does not match this chart"|xlt }}</h5>
+            <p class="mb-1">{{ "The patient named on this document does not match the chart it is being uploaded onto. These results may belong to a different patient — do NOT lock them until you have confirmed this report is for the correct patient."|xlt }}</p>
+            {% if identity_detail %}<div class="small">{{ identity_detail|text }}</div>{% endif %}
+        </div>
+    {% elseif is_lab and identity_status == 'unknown' %}
+        <div class="alert alert-warning" role="alert">
+            <i class="fa fa-question-circle mr-1"></i>{{ "The patient identity on this document could not be confirmed against this chart. Verify these results belong to this patient before locking."|xlt }}
+            {% if identity_detail %}<div class="small mt-1">{{ identity_detail|text }}</div>{% endif %}
+        </div>
+    {% elseif is_lab and identity_status == 'match' %}
+        <div class="alert alert-success py-2" role="alert">
+            <i class="fa fa-check-circle mr-1"></i>{{ "Patient name and date of birth on the document match this chart."|xlt }}
+        </div>
+    {% endif %}
+
+    {# Honest-scope banner for the third document type: locking a medication
+       list records verification only. The chart's medication list is NOT
+       touched — reconciliation (interactions, duplicates, superseded orders)
+       is a deliberately deferred clinical step. #}
+    {% if is_medication_list %}
+        <div class="alert alert-info py-2" role="alert">
+            <i class="fa fa-info-circle mr-1"></i>{{ "Locking saves this verified transcription only. These medications are NOT written to the chart's medication list — reconcile them into the chart through your normal clinical workflow."|xlt }}
+        </div>
+    {% endif %}
+
+    {# When extraction found nothing (degraded model, or a page it could not
+       read), the reviewer still gets the rows structure to hand-enter against
+       the document on the right — not a silent empty screen. #}
+    {% if is_lab and fields is empty %}
+        <div class="alert alert-info py-2">
+            <i class="fa fa-info-circle mr-1"></i>{{ "No lab values were extracted from this document. Enter the results manually below and verify them against the document on the right."|xlt }}
+        </div>
+    {% endif %}
+
+    {# Two-pane review: extracted rows to verify (left) alongside the source
+       document (right), so each value is checked against the page it came from. #}
+    <div class="row ccp-review-wrap">
+    <div class="col-lg-7 ccp-pane">
+
+    <table class="table table-sm table-bordered">
+        <thead class="thead-light">
+            <tr>
+                <th style="width:2rem">#</th>
+                <th>{{ "Field"|xlt }}</th>
+                <th>{{ "Verified value"|xlt }}</th>
+                {% if is_lab %}<th>{{ "Unit"|xlt }}</th><th>{{ "Range"|xlt }}</th><th>{{ "Flag"|xlt }}</th>{% endif %}
+                <th>{{ "Model proposed"|xlt }}</th>
+                <th>{{ "Source"|xlt }}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for f in fields %}
+            {# data-page/data-bbox feed the pdf.js citation overlay: the VLM's
+               normalized 0-1000 page coordinates for the value, drawn on the
+               rendered page in the right pane and linked back to this row. #}
+            <tr id="ccp-row-{{ f.id|attr }}" data-field-id="{{ f.id|attr }}"
+                data-page="{{ (f.page is not null ? f.page : '')|attr }}"
+                data-bbox="{{ (f.bbox ? f.bbox|join(',') : '')|attr }}">
+                <td class="align-middle text-muted">{{ loop.index }}</td>
+                <td class="align-middle"><strong>{{ f.field_key|text }}</strong></td>
+                <td>
+                    {% if locked and not is_elevated %}
+                        {{ f.value|text }}
+                    {% else %}
+                        <form method="POST" action="{{ post_url|attr }}" class="form-inline">
+                            {{ csrfToken('default', 'csrf_token_form') }}
+                            <input type="hidden" name="action" value="edit">
+                            <input type="hidden" name="extraction_id" value="{{ extraction_id|attr }}">
+                            <input type="hidden" name="field_id" value="{{ f.id|attr }}">
+                            <input type="text" class="form-control form-control-sm mr-1" name="value"
+                                   value="{{ f.value|attr }}" style="min-width: 8rem;">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">{{ "Save"|xlt }}</button>
+                        </form>
+                    {% endif %}
+                    {% if f.edited_by_user %}<span class="badge badge-light ccp-edited">{{ "edited"|xlt }}</span>{% endif %}
+                </td>
+                {% if is_lab %}
+                    <td class="align-middle">{{ f.unit|text }}</td>
+                    <td class="align-middle">{{ f.ref_range|text }}</td>
+                    <td class="align-middle">{{ f.abnormal_flag|text }}</td>
+                {% endif %}
+                <td class="align-middle ccp-model-said">
+                    {% if f.vlm_value is not null %}{{ f.vlm_value|text }}{% else %}—{% endif %}
+                </td>
+                <td class="align-middle ccp-cite">
+                    {% if f.page is not null %}
+                        {% if source_view_url %}
+                            {# Click-to-source. Default (no JS / no pdf.js): a
+                               #page=N deep link on the raw document URL,
+                               targeted at the named iframe so the native PDF
+                               viewer jumps to the cited page. When the canvas
+                               overlay is active, the script intercepts the
+                               click and scrolls/flashes the field's box. #}
+                            <a class="ccp-cite-link" href="{{ source_view_url|attr }}#page={{ f.page|attr }}"
+                               target="ccpSourceFrame" title="{{ f.quote|attr }}"
+                               data-cite-field-id="{{ f.id|attr }}">
+                                <i class="fa fa-file-text-o"></i> {{ "p."|xlt }}{{ f.page|text }}
+                            </a>
+                        {% else %}
+                            <span title="{{ f.quote|attr }}">
+                                <i class="fa fa-file-text-o"></i> {{ "p."|xlt }}{{ f.page|text }}
+                            </span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">{{ "manual"|xlt }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="{{ is_lab ? 8 : 5 }}" class="text-muted">{{ "No fields yet."|xlt }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if is_lab and (not locked or is_elevated) %}
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <form method="POST" action="{{ post_url|attr }}" class="form-row align-items-end">
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="add_field">
+                    <input type="hidden" name="extraction_id" value="{{ extraction_id|attr }}">
+                    <div class="col"><label class="small mb-0">{{ "Test"|xlt }}</label><input type="text" class="form-control form-control-sm" name="field_key" required></div>
+                    <div class="col"><label class="small mb-0">{{ "Value"|xlt }}</label><input type="text" class="form-control form-control-sm" name="value"></div>
+                    <div class="col"><label class="small mb-0">{{ "Unit"|xlt }}</label><input type="text" class="form-control form-control-sm" name="unit"></div>
+                    <div class="col"><label class="small mb-0">{{ "Range"|xlt }}</label><input type="text" class="form-control form-control-sm" name="ref_range"></div>
+                    <div class="col"><label class="small mb-0">{{ "Flag"|xlt }}</label><input type="text" class="form-control form-control-sm" name="abnormal_flag"></div>
+                    <div class="col-auto"><button type="submit" class="btn btn-sm btn-outline-primary">{{ "Add row"|xlt }}</button></div>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+    </div>{# /left pane #}
+
+    {# RIGHT: the source document, prominent and scrollable, so the reviewer
+       reads each value off the page. Dual-mode: the iframe (native PDF viewer)
+       is the server-rendered default and the no-JS / non-PDF fallback; when
+       the rows carry bbox citations AND the vendored pdf.js loads AND the
+       document parses as a PDF, the script below swaps in the canvas view and
+       draws each citation's bounding box on the real rendered page. #}
+    <div class="col-lg-5 ccp-pane ccp-pdf-pane">
+        <div class="d-flex align-items-baseline justify-content-between mb-1">
+            <div class="font-weight-bold small text-muted">{{ "Source document"|xlt }}</div>
+            <div class="ccp-model-said" id="ccp-view-toggle" hidden>
+                <a href="#" id="ccp-view-toggle-link"></a>
+            </div>
+        </div>
+        {% if source_view_url %}
+            <div class="ccp-canvas-view" id="ccp-canvas-view" hidden></div>
+            <iframe class="ccp-source-frame" id="ccp-source-frame" name="ccpSourceFrame"
+                    src="{{ source_view_url|attr }}" title="{{ 'Source document'|attr }}"></iframe>
+        {% else %}
+            <div class="alert alert-secondary mb-0">{{ "The source document is not available for this extraction (it may not have been stored). Verify the values against your copy."|xlt }}</div>
+        {% endif %}
+    </div>
+
+    </div>{# /row #}
+
+    <div class="d-flex align-items-center justify-content-between mt-3">
+        <a href="{{ patient_url|attr }}" class="btn btn-outline-secondary">
+            <i class="fa fa-user mr-1"></i>{{ "Go to patient"|xlt }}
+        </a>
+        <div>
+            {% if not locked %}
+                {# Single-quoted attribute: xlj (json_encode) supplies double
+                   quotes, which would close a double-quoted attribute early. #}
+                <form method="POST" action="{{ post_url|attr }}" class="form-inline d-inline-flex align-items-end"
+                      onsubmit='return confirm({{ (is_medication_list ? "Lock this verified transcription? Medications are NOT written to the chart." : "Lock these values and write them into the chart?")|xlj }})'>
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="lock">
+                    <input type="hidden" name="extraction_id" value="{{ extraction_id|attr }}">
+                    {% if is_lab %}
+                        <div class="form-group mb-0 mr-2">
+                            <label class="small mb-0 mr-1" for="ccpDrawDate">{{ "Draw date"|xlt }}</label>
+                            <input type="date" id="ccpDrawDate" class="form-control form-control-sm"
+                                   name="collection_date" value="{{ collection_date|attr }}">
+                        </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="fa fa-lock mr-1"></i>{{ "Verify & lock"|xlt }}
+                    </button>
+                </form>
+            {% elseif is_elevated %}
+                <form method="POST" action="{{ post_url|attr }}" style="display:inline;"
+                      onsubmit='return confirm({{ "Unlock this extraction for correction?"|xlj }})'>
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="unlock">
+                    <input type="hidden" name="extraction_id" value="{{ extraction_id|attr }}">
+                    <button type="submit" class="btn btn-outline-warning">
+                        <i class="fa fa-unlock mr-1"></i>{{ "Unlock to correct"|xlt }}
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if source_view_url %}
+    {# Bounding-box overlay on the REAL rendered page. An ES module so browsers
+       without module support skip it entirely; every failure path (vendored
+       pdf.js missing, source not a PDF, render error) simply returns, leaving
+       the native iframe viewer untouched. When it succeeds, the iframe is
+       swapped for pdf.js canvases and each row's normalized 0-1000 bbox is
+       drawn on its page as a percentage-positioned highlight, numbered to the
+       field rows. Hover a box or row to link them; click a box to jump to its
+       row; click a row's page citation to jump to (and flash) its box. #}
+    <script type="module">
+    (async function () {
+        'use strict';
+
+        var PDFJS_URL = {{ pdfjs_url|json_encode|raw }};
+        var PDFJS_WORKER_URL = {{ pdfjs_worker_url|json_encode|raw }};
+        var DOC_URL = {{ source_view_url|json_encode|raw }};
+        var MAX_RENDER_PAGES = 25;
+        var openViewerLabel = {{ "Open in PDF viewer"|xlt|json_encode|raw }};
+        var showCitationsLabel = {{ "Show citation boxes"|xlt|json_encode|raw }};
+
+        var host = document.getElementById('ccp-canvas-view');
+        var frame = document.getElementById('ccp-source-frame');
+        var toggleWrap = document.getElementById('ccp-view-toggle');
+        var toggleLink = document.getElementById('ccp-view-toggle-link');
+        if (!host || !frame || !toggleWrap || !toggleLink) {
+            return;
+        }
+
+        // Collect the citation geometry the rows carry (data-page/data-bbox).
+        var rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-field-id]'));
+        var items = [];
+        var itemsByPage = {};
+        rows.forEach(function (tr) {
+            var page = parseInt(tr.getAttribute('data-page') || '', 10);
+            if (!(page >= 1)) {
+                return;
+            }
+            var bbox = null;
+            var raw = tr.getAttribute('data-bbox') || '';
+            if (raw !== '') {
+                var c = raw.split(',').map(Number);
+                if (c.length === 4 && !c.some(isNaN) && c[2] > c[0] && c[3] > c[1]) {
+                    bbox = c;
+                }
+            }
+            var firstCell = tr.querySelector('td');
+            var it = {
+                fieldId: tr.getAttribute('data-field-id'),
+                page: page,
+                bbox: bbox,
+                tr: tr,
+                boxEl: null,
+                num: firstCell ? firstCell.textContent.trim() : ''
+            };
+            items.push(it);
+            (itemsByPage[page] = itemsByPage[page] || []).push(it);
+        });
+        // No box geometry at all (e.g. manual entry, or a doc type whose
+        // extraction carries no bboxes): the iframe viewer is already right.
+        if (!items.some(function (it) { return it.bbox !== null; })) {
+            return;
+        }
+
+        var pdfjsLib;
+        var doc;
+        try {
+            pdfjsLib = await import(PDFJS_URL);
+            pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+            doc = await pdfjsLib.getDocument({ url: DOC_URL }).promise;
+        } catch (err) {
+            return; // not a PDF, or pdf.js unavailable: keep the iframe.
+        }
+
+        var canvasMode = false;
+        function setMode(canvas) {
+            canvasMode = canvas;
+            host.hidden = !canvas;
+            frame.hidden = canvas;
+            toggleLink.textContent = canvas ? openViewerLabel : showCitationsLabel;
+        }
+
+        function paint(it, on) {
+            if (it.boxEl) {
+                it.boxEl.classList.toggle('ccp-hot', on);
+            }
+            it.tr.classList.toggle('ccp-row-hot', on);
+        }
+
+        function flash(it) {
+            paint(it, true);
+            setTimeout(function () { paint(it, false); }, 1200);
+        }
+
+        function addBox(wrap, it) {
+            var b = it.bbox;
+            var box = document.createElement('div');
+            box.className = 'ccp-bbox';
+            // Normalized 0-1000 coords → percentages of the rendered page, so
+            // the box tracks the canvas at any width without pixel math.
+            box.style.left = (b[0] / 10) + '%';
+            box.style.top = (b[1] / 10) + '%';
+            box.style.width = (Math.max(8, b[2] - b[0]) / 10) + '%';
+            box.style.height = (Math.max(8, b[3] - b[1]) / 10) + '%';
+            var num = document.createElement('span');
+            num.className = 'ccp-bbox-num';
+            num.textContent = it.num;
+            box.appendChild(num);
+            wrap.appendChild(box);
+            it.boxEl = box;
+            box.addEventListener('mouseenter', function () { paint(it, true); });
+            box.addEventListener('mouseleave', function () { paint(it, false); });
+            box.addEventListener('click', function () {
+                it.tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                flash(it);
+            });
+            it.tr.addEventListener('mouseenter', function () { paint(it, true); });
+            it.tr.addEventListener('mouseleave', function () { paint(it, false); });
+        }
+
+        // Render each page to a canvas at the pane's width (measured off the
+        // still-visible iframe), then position that page's boxes over it.
+        var pageWraps = {};
+        var width = Math.max(280, (frame.clientWidth || host.clientWidth || 640) - 18);
+        var pageCount = Math.min(doc.numPages, MAX_RENDER_PAGES);
+        try {
+            for (var p = 1; p <= pageCount; p++) {
+                var page = await doc.getPage(p);
+                var scale = width / page.getViewport({ scale: 1 }).width;
+                var viewport = page.getViewport({ scale: scale });
+                var outputScale = window.devicePixelRatio || 1;
+                var wrap = document.createElement('div');
+                wrap.className = 'ccp-page-wrap';
+                wrap.style.width = Math.floor(viewport.width) + 'px';
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                wrap.appendChild(canvas);
+                var label = document.createElement('span');
+                label.className = 'ccp-page-label';
+                label.textContent = {{ "p."|xlt|json_encode|raw }} + p;
+                wrap.appendChild(label);
+                host.appendChild(wrap);
+                pageWraps[p] = wrap;
+                await page.render({
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport,
+                    transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null
+                }).promise;
+                (itemsByPage[p] || []).forEach(function (it) {
+                    if (it.bbox) {
+                        addBox(wrap, it);
+                    }
+                });
+                if (p === 1) {
+                    setMode(true); // first page is up: swap the iframe out.
+                    toggleWrap.hidden = false;
+                }
+            }
+        } catch (err) {
+            if (!canvasMode) {
+                return; // nothing usable rendered; the iframe never left.
+            }
+        }
+
+        // Click-to-source: in canvas mode the citation link scrolls to the
+        // cited page and flashes the field's box. Outside canvas mode (or for
+        // a page beyond the render cap) the anchor's native #page=N deep link
+        // drives the iframe viewer instead.
+        items.forEach(function (it) {
+            var link = document.querySelector('a.ccp-cite-link[data-cite-field-id="' + it.fieldId + '"]');
+            if (!link) {
+                return;
+            }
+            link.addEventListener('click', function (ev) {
+                if (!canvasMode) {
+                    return;
+                }
+                if (!pageWraps[it.page]) {
+                    setMode(false); // beyond the cap: hand off to the iframe.
+                    return;
+                }
+                ev.preventDefault();
+                pageWraps[it.page].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (it.boxEl) {
+                    flash(it);
+                }
+            });
+        });
+
+        toggleLink.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            setMode(!canvasMode);
+        });
+    })();
+    </script>
+    {% endif %}
+
+    {% endif %}
+</div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Railway build config for nashemrendo.
+# https://docs.railway.com/reference/config-as-code
+#
+# Uses Dockerfile.railway at repo root (openemr/openemr:flex + FLEX_REPOSITORY).
+# First boot clones GitHub and runs composer/npm in-container — no full-repo COPY.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.railway"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

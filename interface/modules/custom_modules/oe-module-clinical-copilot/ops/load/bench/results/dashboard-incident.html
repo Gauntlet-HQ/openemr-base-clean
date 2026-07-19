@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clinical Co-Pilot — Observability (INCIDENT)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; margin: 0; padding: 24px; background:#0f1115; color:#e6e6e6; }
+  @media (prefers-color-scheme: light) { body { background:#f6f7f9; color:#1a1a1a; } .card{background:#fff!important;} }
+  h1 { font-size: 20px; margin: 0 0 4px; } .sub { opacity:.7; font-size:13px; margin-bottom:20px; }
+  .banner { border-radius:10px; padding:16px 20px; margin-bottom:20px; }
+  .banner.ok { background:#14351f; border:1px solid #2ea043; }
+  .banner.fire { background:#3d1417; border:1px solid #e5484d; }
+  .banner h2 { margin:0 0 8px; font-size:16px; }
+  .banner ul { margin:0; padding-left:18px; } .banner li { margin-bottom:10px; }
+  .mean,.oncall { font-size:12px; opacity:.85; } .oncall{opacity:.65;}
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:22px; }
+  .card { background:#171a21; border:1px solid #262b36; border-radius:10px; padding:14px 16px; }
+  .card .label { font-size:12px; opacity:.7; } .card .value { font-size:22px; font-weight:600; margin-top:4px; }
+  .card.bad .value { color:#ff6b6b; } .card.good .value { color:#3fb950; }
+  table { width:100%; border-collapse:collapse; margin-bottom:24px; font-size:13px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid #262b36; }
+  th { opacity:.7; font-weight:600; } tr.fire td { background:rgba(229,72,77,.10); }
+  .foot { font-size:12px; opacity:.6; margin-top:12px; max-width:900px; }
+  .overflow { overflow-x:auto; }
+</style></head>
+<body>
+  <h1>Clinical Co-Pilot — Observability (INCIDENT)</h1>
+  <div class="sub">Offline demonstration · metric math via real RateMath · findings are real AlertName/AlertFinding value objects · thresholds are AlertEvaluator defaults</div>
+  <div class="banner fire"><h2>🔴 4 alert(s) FIRING</h2><ul><li><strong>wrong_patient_v3_trip</strong> — 1 chat session(s) frozen on a V3 patient-identity sev-1 trip<br><span class="mean">means: patient pinning failed upstream of the LLM -- sev-1</span><br><span class="oncall">on-call: freeze module (feature flag), preserve session + trace, diff tool-executor pid injection vs. citations before re-enable</span></li><li><strong>p95_latency</strong> — chat turn p95 latency 25776ms vs 15000ms threshold<br><span class="mean">means: physician-visible slowness; worker not keeping up</span><br><span class="oncall">on-call: check trace step breakdown: LLM latency vs. extraction vs. queue; verify worker heartbeat; scale/interval-tune worker</span></li><li><strong>error_rate</strong> — error rate 7.4% vs 5.0% threshold<br><span class="mean">means: systemic failure (DB, LLM, schema drift)</span><br><span class="oncall">on-call: check error_class distribution in traces; if LLM-side, confirm degradation is engaging</span></li><li><strong>tool_failure_rate</strong> — tool call failure rate 6.0% vs 2.0% threshold<br><span class="mean">means: a capability breaking on real data shapes</span><br><span class="oncall">on-call: pull failing spans&#039; payloads; usually a data-quality edge -- add the case to fixtures before fixing</span></li></ul></div>
+  <div class="tiles"><div class="card "><div class="label">Total spans (window)</div><div class="value">721</div></div><div class="card bad"><div class="label">Error rate</div><div class="value">7.35%</div></div><div class="card bad"><div class="label">Chat p95</div><div class="value">25776 ms</div></div><div class="card "><div class="label">Chat p50 / p99</div><div class="value">16942 / 26577 ms</div></div><div class="card "><div class="label">LLM cost (window)</div><div class="value">$0.555</div></div><div class="card "><div class="label">Tokens in / out</div><div class="value">156,000 / 36,000</div></div></div>
+  <h3>Latency &amp; error rate by span kind</h3>
+  <div class="overflow"><table>
+    <tr><th>kind</th><th>count</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>error rate</th></tr>
+    <tr><td>chat_turn</td><td>121</td><td>16942</td><td>25776</td><td>26577</td><td>33.88%</td></tr><tr><td>render</td><td>280</td><td>114</td><td>173</td><td>179</td><td>0%</td></tr><tr><td>tool_call</td><td>200</td><td>129</td><td>211</td><td>217</td><td>6%</td></tr><tr><td>verify</td><td>120</td><td>3</td><td>5</td><td>5</td><td>0%</td></tr>
+  </table></div>
+  <h3>Alert evaluation (all 8)</h3>
+  <div class="overflow"><table>
+    <tr><th></th><th>alert</th><th>message</th><th>value</th><th>threshold</th></tr>
+    <tr class="fire"><td>🔴</td><td>wrong_patient_v3_trip</td><td>1 chat session(s) frozen on a V3 patient-identity sev-1 trip</td><td>1</td><td>0</td></tr><tr class="fire"><td>🔴</td><td>p95_latency</td><td>chat turn p95 latency 25776ms vs 15000ms threshold</td><td>25,776</td><td>15,000</td></tr><tr class="fire"><td>🔴</td><td>error_rate</td><td>error rate 7.4% vs 5.0% threshold</td><td>7.35</td><td>5</td></tr><tr class="fire"><td>🔴</td><td>tool_failure_rate</td><td>tool call failure rate 6.0% vs 2.0% threshold</td><td>6</td><td>2</td></tr><tr class="ok"><td>🟢</td><td>verification_failure_rate</td><td>verification failure rate 0.0% vs 10.0% threshold</td><td>0</td><td>10</td></tr><tr class="ok"><td>🟢</td><td>llm_spend</td><td>hourly LLM burn within trend (dev-stack cadence config)</td><td>0</td><td>0</td></tr><tr class="ok"><td>🟢</td><td>worker_heartbeat_stale</td><td>worker heartbeat fresh (dev-stack background_services)</td><td>0</td><td>0</td></tr><tr class="ok"><td>🟢</td><td>unaccounted_entity</td><td>no unaccounted extraction entities in the window</td><td>0</td><td>0</td></tr>
+  </table></div>
+  <p class="foot">On the dev stack this exact surface is served by <code>public/dashboard.php</code> +
+  <code>dashboard.html.twig</code> reading <code>mod_copilot_trace</code> through <code>MetricsService</code>,
+  and <code>AlertEvaluator</code> fires the same findings on the worker tick. This page renders the identical
+  metric bag and findings computed offline from a synthetic trace population, so the dashboard/alert behaviour
+  can be demonstrated without a reachable stack.</p>
+</body></html>

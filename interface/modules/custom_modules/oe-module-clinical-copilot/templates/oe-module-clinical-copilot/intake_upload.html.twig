@@ -1,0 +1,66 @@
+{#
+# Clinical Co-Pilot -- Week 2 intake upload (create a patient from an intake PDF).
+#
+# Autoescape is globally OFF for this project (build-notes.md) -- every dynamic
+# value is explicitly escaped with |text, |attr, or |xlt.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Intake Upload — Clinical Co-Pilot"|xlt }}</title>
+    {{ setupHeader() }}
+</head>
+<body class="body_top">
+{# OpenEMR's tab bar labels a tab from the first .title element in the
+   loaded page (interface/main/tabs/js/custom_bindings.js); without one
+   the tab reads "Unknown". Hidden: the visible layout has its own heading. #}
+<span class="title" style="display: none">{{ "Intake Upload"|xlt }}</span>
+<div class="container-fluid mt-3" style="max-width: 720px;">
+    <h3 class="mb-1">{{ "New Patient Intake"|xlt }}</h3>
+    <p class="text-muted">{{ "Upload a scanned intake form. The co-pilot reads it and prefills a new-patient form beside the document, so you can verify every field and then Save to create the patient. Nothing is saved until you click Save."|xlt }}</p>
+
+    {% if error %}
+        <div class="alert alert-warning" role="alert">{{ error|text }}</div>
+    {% endif %}
+
+    {% if not llm_configured %}
+        <div class="alert alert-info" role="alert">
+            {{ "No document model is configured in this environment, so extraction is unavailable — you will get a blank intake form to fill in by hand, then verify and lock it the same way."|xlt }}
+        </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" action="{{ post_url|attr }}" enctype="multipart/form-data">
+                {{ csrfToken('default', 'csrf_token_form') }}
+                <input type="hidden" name="action" value="upload">
+                <div class="form-group">
+                    <label for="ccpIntakeFile">{{ "Intake form (PDF or image)"|xlt }}</label>
+                    <input type="file" class="form-control-file" id="ccpIntakeFile" name="document"
+                           accept="application/pdf,image/png,image/jpeg,image/webp">
+                    <small class="form-text text-muted">{{ "PDF, PNG, JPEG, or WEBP"|xlt }}{% if max_mb %} &middot; {{ "max"|xlt }} {{ max_mb }} MB{% endif %}. {{ "For a large multi-page scan, upload one page at a time."|xlt }}</small>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-upload mr-1"></i>{{ "Upload & extract"|xlt }}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <a href="{{ pdf_url|attr }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+            <i class="fa fa-file-pdf-o mr-1"></i>{{ "Download blank intake form (PDF)"|xlt }}
+        </a>
+        <a href="{{ pdf_url|attr }}?sample=1" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm ml-2">
+            <i class="fa fa-flask mr-1"></i>{{ "Download filled SAMPLE (for testing)"|xlt }}
+        </a>
+        <div class="text-muted small mt-1">{{ "Blank: print, have the patient fill it in, then scan and upload above. Sample: synthetic test data — upload it to try extraction end-to-end without scanning."|xlt }}</div>
+    </div>
+</div>
+</body>
+</html>

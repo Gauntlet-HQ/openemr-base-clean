@@ -1,0 +1,138 @@
+##
+# Clinical Co-Pilot Week 2 dependency audit + security scan -- runs on EVERY
+# push and pull request. The repo's stock quality workflows (phpstan.yml,
+# semgrep.yml, ...) only trigger on PRs targeting master/rel-*, so they never
+# fire on this fork's PRs (which target FINAL_REVIEW/main); this workflow
+# mirrors w2-eval-gate.yml's unconditional trigger so "dependency audit and
+# security scan on every PR" actually holds here.
+#
+# Three jobs:
+# 1. composer-audit: known-vulnerability advisories against the root
+#    composer.lock (BLOCKING on any advisory). Abandoned packages are
+#    reported but do not fail the job -- six abandoned upstream OpenEMR
+#    dependencies pre-date this module and are unrelated to any PR under
+#    review.
+# 2. npm-audit: production npm dependencies against the root
+#    package-lock.json at high severity and above (BLOCKING at high+ --
+#    meaningful without instantly failing every build on low/moderate noise
+#    in the legacy frontend tree).
+# 3. semgrep: the repo's own Semgrep setup -- the SAME registry rulesets,
+#    local semgrep.yaml rules, excludes, and rule overrides as
+#    .github/workflows/semgrep.yml and run-semgrep.sh, so the findings
+#    config stays single-source. Diff-aware and BLOCKING on new findings
+#    for pull requests; full-codebase informational scan on push (the
+#    legacy OpenEMR tree carries pre-existing findings that no PR here
+#    introduced, so a blocking full scan would be permanently red).
+
+name: Dependency Audit and Security Scan
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  composer-audit:
+    runs-on: ubuntu-latest
+
+    name: composer-audit (advisories, blocking)
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup PHP
+      uses: ./.github/actions/setup-php-composer
+      with:
+        php-version: '8.2'
+        # `composer audit --locked` reads composer.lock directly; vendor/ is
+        # never needed, so skip the install for a faster gate.
+        skip-composer-install: 'true'
+
+    - name: Composer security audit (blocking on advisories)
+      run: |
+        test -f composer.lock
+        composer audit --locked --abandoned=report
+
+  npm-audit:
+    runs-on: ubuntu-latest
+
+    name: npm-audit (production deps, high+, blocking)
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+
+    - name: npm security audit (blocking at high severity and above)
+      run: |
+        test -f package-lock.json
+        npm audit --omit=dev --audit-level=high
+
+  semgrep:
+    runs-on: ubuntu-latest
+
+    name: semgrep (repo ruleset)
+
+    container:
+      image: semgrep/semgrep:latest
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        # The PR scan diffs against the base SHA, so it needs history.
+        fetch-depth: 0
+
+    # Same invocation as .github/workflows/semgrep.yml / run-semgrep.sh:
+    # registry packs + local semgrep.yaml (whose custom rules replace the two
+    # excluded default p/php rules with OpenEMR-sanitizer-aware versions),
+    # identical excludes. Findings config stays the single source of truth.
+    - name: Run Semgrep (full scan, informational)
+      if: github.event_name != 'pull_request'
+      run: |
+        semgrep \
+          --config p/php \
+          --config p/security-audit \
+          --config p/javascript \
+          --config p/nodejs \
+          --config ./semgrep.yaml \
+          --exclude vendor \
+          --exclude node_modules \
+          --exclude tests \
+          --exclude ccdaservice/node_modules \
+          --exclude Documentation \
+          --exclude '*.mustache' \
+          --exclude-rule php.lang.security.injection.echoed-request.echoed-request \
+          --exclude-rule php.lang.security.injection.printed-request.printed-request \
+          .
+
+    - name: Run Semgrep (PR diff, blocking on new findings)
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        semgrep \
+          --config p/php \
+          --config p/security-audit \
+          --config p/javascript \
+          --config p/nodejs \
+          --config ./semgrep.yaml \
+          --exclude vendor \
+          --exclude node_modules \
+          --exclude tests \
+          --exclude ccdaservice/node_modules \
+          --exclude Documentation \
+          --exclude '*.mustache' \
+          --exclude-rule php.lang.security.injection.echoed-request.echoed-request \
+          --exclude-rule php.lang.security.injection.printed-request.printed-request \
+          --baseline-commit="$BASE_SHA" \
+          --error \
+          .

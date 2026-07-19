@@ -1,0 +1,111 @@
+Clinical Co-Pilot Week 2 — end-to-end demo
+scenario: one outpatient endocrinologist prepping a follow-up visit
+host: x86_64  php: 8.4.19  (module compute only — no DB / LLM / web stack)
+
+==============================================================================
+  1. INGEST + EXTRACT — a scanned lab PDF becomes cited, typed facts
+==============================================================================
+uploaded: lab_report.pdf  (2 pages, image-only scan)
+extracted 3 fields, each carrying a page + verbatim quote citation:
+  • hemoglobin_a1c     = 8.4 %     [page 1: "Hemoglobin A1c ... 8.4 %"]
+  • glucose_fasting    = 162 mg/dL  [page 1: "Glucose, Fasting 162 mg/dL"]
+  • ldl_cholesterol    = 118 mg/dL  [page 2: "LDL Cholesterol 118 mg/dL"]
+citation contract satisfied: every extracted fact is click-to-source (FR-4).
+
+now a MALFORMED document (missing required value + fabricated field) is uploaded:
+  ✓ REFUSED at the schema gate — nothing is persisted, no partial write (FR-3, safe_refusal).
+
+==============================================================================
+  2. VERIFY — the read-path discipline every generated claim must pass
+==============================================================================
+session pinned to patient pid=7; two grounded A1c facts loaded.
+
+(a) grounded claim  "A1c rose from 7.2% to 7.6%"
+    -> allPassed=TRUE  (V1 schema, V2 citation, V3 identity, V4 numeric all pass)
+(b) wrong-patient claim  (cites a "vital" fact belonging to a DIFFERENT pid)
+    -> V1 schema passes; V3 identity FAILS (passed=FALSE), hasSev1=TRUE — the chat turn is FROZEN (sev-1).
+(c) uncited lab value  "Her A1c is 5.9%" (claim_type lab_value, no citation)
+    -> V2 citation-resolution FAILS (passed=FALSE) — an ungrounded claim is caught, never shown.
+
+==============================================================================
+  3. RETRIEVE — guideline evidence, cited, separate from patient facts
+==============================================================================
+query: "what is the A1c goal and when to intensify therapy"  (tags: a1c)
+  • [ada-a1c-target] For most non-pregnant adults with type 2 diabetes, a reasonable A1c goal is below 7%. L…
+  • [ada-a1c-monitoring] Assess A1c at least twice per year in patients meeting treatment goals and with stable …
+  • [ada-metformin-first-line] Metformin is the preferred initial pharmacologic agent for type 2 diabetes in the absen…
+every hit carries a guideline citation (source_type=guideline), never mixed with patient-fact citations (FR-8).
+
+==============================================================================
+  4. OBSERVABILITY — metric bag + alert evaluation (healthy vs incident)
+==============================================================================
+HEALTHY scenario
+  spans=748  error_rate=0.13%  cost=$0.555
+  chat p95=10109ms
+  [ ok  ] wrong_patient_v3_trip      no wrong-patient trips in the window
+  [ ok  ] p95_latency                chat turn p95 latency 10109ms vs 15000ms threshold
+  [ ok  ] error_rate                 error rate 0.1% vs 5.0% threshold
+  [ ok  ] tool_failure_rate          tool call failure rate 0.5% vs 2.0% threshold
+  [ ok  ] verification_failure_rate  verification failure rate 0.0% vs 10.0% threshold
+  [ ok  ] llm_spend                  hourly LLM burn within trend (dev-stack cadence config)
+  [ ok  ] worker_heartbeat_stale     worker heartbeat fresh (dev-stack background_services)
+  [ ok  ] unaccounted_entity         no unaccounted extraction entities in the window
+  -> /home/user/openemr-base-clean/interface/modules/custom_modules/oe-module-clinical-copilot/ops/load/bench/results/dashboard-healthy.html
+
+INCIDENT scenario
+  spans=721  error_rate=7.35%  cost=$0.555
+  chat p95=25776ms
+  [FIRED] wrong_patient_v3_trip      1 chat session(s) frozen on a V3 patient-identity sev-1 trip
+  [FIRED] p95_latency                chat turn p95 latency 25776ms vs 15000ms threshold
+  [FIRED] error_rate                 error rate 7.4% vs 5.0% threshold
+  [FIRED] tool_failure_rate          tool call failure rate 6.0% vs 2.0% threshold
+  [ ok  ] verification_failure_rate  verification failure rate 0.0% vs 10.0% threshold
+  [ ok  ] llm_spend                  hourly LLM burn within trend (dev-stack cadence config)
+  [ ok  ] worker_heartbeat_stale     worker heartbeat fresh (dev-stack background_services)
+  [ ok  ] unaccounted_entity         no unaccounted extraction entities in the window
+  -> /home/user/openemr-base-clean/interface/modules/custom_modules/oe-module-clinical-copilot/ops/load/bench/results/dashboard-incident.html
+(rendered dashboards written to ops/load/bench/results/dashboard-{healthy,incident}.html)
+
+==============================================================================
+  5. EVAL GATE — 50 cases, boolean rubrics, PR-blocking (the HARD GATE)
+==============================================================================
+
+Clinical Co-Pilot — Week 2 eval gate
+----------------------------------------------------
+  citation_present       100.0%  (34/34)
+  factually_consistent   100.0%  (34/34)
+  no_phi_in_logs         100.0%  (30/30)
+  safe_refusal           100.0%  (16/16)
+  schema_valid           100.0%  (30/30)
+
+eval: GATE PASSED — all rubrics at or above baseline.
+
+==============================================================================
+  6. COST — measured per-call cost tied to real prompt sizes
+==============================================================================
+Clinical Co-Pilot — MEASURED prompt sizes (real assembly over fixtures)
+==========================================================================
+method: exact char count of assembled prompts; tokens = chars / 4 (Gemini ratio)
+
+fixture        facts  synth chars   synth tokens  cached tokens   incr tokens
+ccp_001            6         9211           2303           1389            18
+ccp_002            4         8102           2026           1164            18
+ccp_003            4         8524           2131           1249            18
+ccp_004            5         8711           2178           1290            18
+synthetic_heavy    36        25830           6458              0             0
+
+Median across real fixtures (the numbers to use in ops/cost-analysis.md):
+  TokIn_synth  =   2155 tokens   (was estimated 8000; heavy-patient upper bound = 6458)
+  TokCached    =   1270 tokens   (was estimated 8000)
+  TokIncr      =     18 tokens   (was estimated  700; turn-1 empty transcript — grows with session)
+
+Per-call cost via LlmCostEstimate (Gemini 2.5 Pro list rates):
+  synthesis reduce (miss)      = $0.01069
+  chat turn 1 (cache write)    = $0.00461
+  vision extraction / document = $0.00650
+
+==============================================================================
+  DEMO COMPLETE
+==============================================================================
+shown: ingestion+citation, verification (incl. a sev-1 trip caught), retrieval,
+observability metrics + firing alerts, the eval gate, and measured cost — end to end.

@@ -1,0 +1,134 @@
+{#
+# Clinical Co-Pilot -- intake review (deferred-save): prefilled new-patient
+# fields on the left, the source PDF on the right, all sections expanded. The
+# human edits and clicks Save; only then is the patient created.
+#
+# Autoescape is globally OFF for this project -- every dynamic value is
+# explicitly escaped with |text/|attr/|xlt.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Clinical Co-Pilot -- New patient from intake"|xlt }}</title>
+    {{ setupHeader() }}
+    <style>
+        .ccp-intake-wrap { height: calc(100vh - 90px); }
+        .ccp-intake-col { height: 100%; overflow-y: auto; }
+        .ccp-pdf-frame { width: 100%; height: 100%; border: 1px solid #dee2e6; border-radius: 4px; }
+        .ccp-intake-form .form-group { margin-bottom: 0.5rem; }
+        .ccp-sec { border-bottom: 1px solid #dee2e6; margin: 1rem 0 0.5rem; padding-bottom: 0.25rem; color: #495057; }
+        .ccp-cite-link { white-space: nowrap; }
+    </style>
+</head>
+<body class="body_top">
+<div class="container-fluid mt-2">
+    <h5 class="mb-2">
+        <i class="fa fa-user-plus mr-1"></i>{{ "New patient from intake -- review & save"|xlt }}
+        <small class="text-muted">{{ "Verify the fields against the document on the right, then Save to create the patient."|xlt }}</small>
+    </h5>
+
+    {% if errors is not empty %}
+        <div class="alert alert-danger py-2">
+            <strong>{{ "The patient was not saved:"|xlt }}</strong>
+            <ul class="mb-0">{% for e in errors %}<li>{{ e|text }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
+    {# Why did nothing prefill? Only shown when extraction yielded no values, so a
+       blank form is self-explanatory (model off / read-but-rejected / unreadable). #}
+    {% if extraction_note is defined and extraction_note %}
+        <div class="alert alert-warning py-2">
+            <i class="fa fa-exclamation-triangle mr-1"></i>{{ extraction_note|text }}
+        </div>
+    {% endif %}
+
+    <form method="POST" action="{{ post_url|attr }}" id="ccpIntakeForm">
+        {{ csrfToken('default', 'csrf_token_form') }}
+        <input type="hidden" name="action" value="save">
+        <input type="hidden" name="pdf_b64" value="{{ pdf_b64|attr }}">
+        <input type="hidden" name="pdf_mime" value="{{ pdf_mime|attr }}">
+        <input type="hidden" name="pdf_name" value="{{ pdf_name|attr }}">
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">{{ "Nothing is saved until you click Save."|xlt }}</span>
+            <button type="submit" class="btn btn-success"><i class="fa fa-save mr-1"></i>{{ "Save new patient"|xlt }}</button>
+        </div>
+
+        <div class="row ccp-intake-wrap">
+            {# LEFT: reused new-patient fields, prefilled, all sections expanded. #}
+            <div class="col-md-6 ccp-intake-col ccp-intake-form">
+                {% for group in groups %}
+                    <div class="ccp-sec"><strong>{{ group.section|xlt }}</strong></div>
+                    {% for f in group.fields %}
+                        <div class="form-group">
+                            <label class="mb-0 small" for="ccp_{{ f.key|attr }}">{{ f.label|xlt }}</label>
+                            {# OPTIONAL source citation (page/quote) the model volunteered for
+                               this field. Purely advisory — most fields have none and render
+                               exactly as before. Intake has no bbox overlay (unlike the lab
+                               review screen), so the light form is: a p.N deep link that jumps
+                               the source iframe to #page=N (the same deep-link pattern the lab
+                               screen uses), with the verbatim quote as a hover tooltip. #}
+                            {% if f.cite_page %}
+                                <a href="#" class="ccp-cite-link small ml-1" data-ccp-cite-page="{{ f.cite_page|attr }}"
+                                   title="{{ f.cite_quote|attr }}">
+                                    <i class="fa fa-file-text-o"></i> {{ "p."|xlt }}{{ f.cite_page|text }}
+                                </a>
+                            {% elseif f.cite_quote %}
+                                <span class="text-muted small ml-1" title="{{ f.cite_quote|attr }}">
+                                    <i class="fa fa-quote-left"></i>
+                                </span>
+                            {% endif %}
+                            {% if f.key == 'sex' %}
+                                <select class="form-control form-control-sm" id="ccp_{{ f.key|attr }}" name="field[{{ f.key|attr }}]">
+                                    <option value=""></option>
+                                    {% for opt in sex_options %}
+                                        <option value="{{ opt|attr }}"{{ f.value == opt ? ' selected' : '' }}>{{ opt|text }}</option>
+                                    {% endfor %}
+                                </select>
+                            {% elseif not f.is_demographic and f.lines > 1 %}
+                                <textarea class="form-control form-control-sm" id="ccp_{{ f.key|attr }}" name="field[{{ f.key|attr }}]" rows="{{ f.lines }}">{{ f.value|text }}</textarea>
+                            {% else %}
+                                <input type="text" class="form-control form-control-sm" id="ccp_{{ f.key|attr }}" name="field[{{ f.key|attr }}]" value="{{ f.value|attr }}">
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+                <div class="text-muted small mt-2">
+                    {{ "Allergies and medications are saved to the chart lists on Save. Chief concern and family history are shown here for your review but are not written to the chart."|xlt }}
+                </div>
+            </div>
+
+            {# RIGHT: the uploaded source document, scrollable. #}
+            <div class="col-md-6 ccp-intake-col">
+                <iframe id="ccpPdfFrame" class="ccp-pdf-frame" src="{{ pdf_data_uri|attr }}" title="{{ 'Uploaded intake document'|attr }}"></iframe>
+            </div>
+        </div>
+
+        <div class="text-right my-2">
+            <button type="submit" class="btn btn-success"><i class="fa fa-save mr-1"></i>{{ "Save new patient"|xlt }}</button>
+        </div>
+    </form>
+</div>
+<script>
+    // Citation deep-links (optional; rendered only when the model volunteered a
+    // page for a field): jump the source iframe to the cited page via the same
+    // #page=N fragment the lab review screen's deep links use. The intake PDF
+    // rides as a data: URI, so the fragment is applied by re-setting src (the
+    // frame's opaque-origin location cannot be scripted). Best-effort viewer
+    // support; the quote tooltip stands on its own if the viewer ignores it.
+    document.querySelectorAll('[data-ccp-cite-page]').forEach(function (link) {
+        link.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            var frame = document.getElementById('ccpPdfFrame');
+            var base = frame.getAttribute('src').split('#')[0];
+            frame.setAttribute('src', base + '#page=' + encodeURIComponent(link.getAttribute('data-ccp-cite-page')));
+        });
+    });
+</script>
+</body>
+</html>

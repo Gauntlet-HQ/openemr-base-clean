@@ -1,0 +1,52 @@
+# GitLab CI for https://labs.gauntletai.com/adamnash/nashemrendo
+#
+# Railway deploy (self-hosted GitLab has no native Railway integration):
+# https://blog.railway.com/p/gitlab-ci-cd
+#
+# Set these in GitLab → Settings → CI/CD → Variables:
+#   RAILWAY_TOKEN, RAILWAY_SERVICE_ID (required)
+#   RAILWAY_MYSQL_SERVICE_NAME — (optional) defaults to MySQL
+#   RAILWAY_OE_PASS, CLINICAL_COPILOT_GEMINI_API_KEY — (optional) only synced when set here
+
+stages:
+  - test
+  - secret-detection
+  - deploy
+
+variables:
+  SECRET_DETECTION_ENABLED: 'true'
+
+include:
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+secret_detection:
+  stage: secret-detection
+
+railway-deploy:
+  stage: deploy
+  image: ghcr.io/railwayapp/cli:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    SVC_ID: $RAILWAY_SERVICE_ID
+  script:
+    - |
+      if [ -z "$RAILWAY_TOKEN" ]; then
+        echo "RAILWAY_TOKEN is not set."
+        echo "Railway → Project → Settings → Tokens → create a project token,"
+        echo "then add it here: https://labs.gauntletai.com/adamnash/nashemrendo/-/settings/ci_cd"
+        exit 1
+      fi
+    - |
+      if [ -z "$SVC_ID" ]; then
+        echo "RAILWAY_SERVICE_ID is not set."
+        echo "Railway: Cmd/Ctrl+K → Copy → Service ID,"
+        echo "then add variable RAILWAY_SERVICE_ID in GitLab CI/CD settings."
+        exit 1
+      fi
+    - chmod +x docker/railway/sync-variables.sh
+    - docker/railway/sync-variables.sh
+    - railway up --no-gitignore --service="$SVC_ID" --detach ${RAILWAY_ENVIRONMENT:+-e "$RAILWAY_ENVIRONMENT"}
+  environment:
+    name: railway
+    url: $RAILWAY_PUBLIC_URL

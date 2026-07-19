@@ -1,0 +1,108 @@
+{
+    "measured_at": "2026-07-13T22:10:00+00:00",
+    "git_commit": "899c583",
+    "method": "exact char\/byte count of real PromptAssembler\/ChatPromptAssembler output over committed fixtures; tokens = ceil(chars \/ 4) per Gemini published ratio",
+    "measured": {
+        "chars_per_token_ratio": 4,
+        "fixtures_measured": 5,
+        "TokIn_synth_measured": 2155,
+        "TokCached_measured": 1270,
+        "TokIncr_measured": 18,
+        "TokOut_synth_estimate": 800,
+        "TokOut_turn_estimate": 300,
+        "TokIn_synth_heavy_upperbound": 6458
+    },
+    "per_call_cost_usd": {
+        "synthesis_reduce_pro": 0.010694,
+        "chat_turn1_pro": 0.00461,
+        "vision_extraction_pro_1_2pg": 0.0065
+    },
+    "per_patient": [
+        {
+            "fixture": "ccp_001",
+            "fact_count": 6,
+            "synthesis": {
+                "system_chars": 4369,
+                "user_chars": 4096,
+                "schema_chars": 746,
+                "input_chars": 9211,
+                "input_tokens_derived": 2303
+            },
+            "chat": {
+                "cached_block_chars": 5553,
+                "cached_block_tokens_derived": 1389,
+                "incremental_chars": 71,
+                "incremental_tokens_derived": 18
+            }
+        },
+        {
+            "fixture": "ccp_002",
+            "fact_count": 4,
+            "synthesis": {
+                "system_chars": 4369,
+                "user_chars": 2987,
+                "schema_chars": 746,
+                "input_chars": 8102,
+                "input_tokens_derived": 2026
+            },
+            "chat": {
+                "cached_block_chars": 4654,
+                "cached_block_tokens_derived": 1164,
+                "incremental_chars": 71,
+                "incremental_tokens_derived": 18
+            }
+        },
+        {
+            "fixture": "ccp_003",
+            "fact_count": 4,
+            "synthesis": {
+                "system_chars": 4369,
+                "user_chars": 3409,
+                "schema_chars": 746,
+                "input_chars": 8524,
+                "input_tokens_derived": 2131
+            },
+            "chat": {
+                "cached_block_chars": 4996,
+                "cached_block_tokens_derived": 1249,
+                "incremental_chars": 71,
+                "incremental_tokens_derived": 18
+            }
+        },
+        {
+            "fixture": "ccp_004",
+            "fact_count": 5,
+            "synthesis": {
+                "system_chars": 4369,
+                "user_chars": 3596,
+                "schema_chars": 746,
+                "input_chars": 8711,
+                "input_tokens_derived": 2178
+            },
+            "chat": {
+                "cached_block_chars": 5157,
+                "cached_block_tokens_derived": 1290,
+                "incremental_chars": 71,
+                "incremental_tokens_derived": 18
+            }
+        },
+        {
+            "fixture": "synthetic_heavy",
+            "fact_count": 36,
+            "synthesis": {
+                "system_chars": 4369,
+                "user_chars": 20715,
+                "schema_chars": 746,
+                "input_chars": 25830,
+                "input_tokens_derived": 6458
+            },
+            "chat": {
+                "cached_block_chars": 0,
+                "cached_block_tokens_derived": 0,
+                "incremental_chars": 0,
+                "incremental_tokens_derived": 0
+            },
+            "note": "synthetic long-history upper bound; 36 facts pre-window, windowed by PromptFactWindow"
+        }
+    ]
+}

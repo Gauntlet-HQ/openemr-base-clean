@@ -1,0 +1,18 @@
+meta {
+  name: 06 - Week 2 Agent
+  seq: 6
+}
+
+docs {
+  The Week 2 multi-agent surface. Real file: `public/agent.php`. One
+  CSRF-checked POST = one full supervisor run: the deterministic supervisor
+  routes to the evidence-retriever worker (always, for a question) and the
+  intake-extractor worker (when a `document` is attached), the LLM-backed
+  composer drafts a claims answer over chart facts its tools fetched, and
+  the critic (deterministic V1-V6 verifier) hard-gates the draft.
+
+  Run "00 - Auth Bootstrap" first for `csrf_token`. The response's
+  `correlation_id` links the whole handoff tree
+  (`supervisor` -> `worker`(s) -> `verify`); request 2 opens the
+  dashboard waterfall for it (admin ACL).
+}

@@ -1,0 +1,83 @@
+meta {
+  name: 1 - Ask the Agent
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/agent.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  pid: {{pid}}
+  question: What was this patient's most recent A1c, and is anything overdue?
+  tags: a1c
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  Runs the supervisor graph end-to-end for one patient question. To also
+  exercise the intake-extractor worker, add two more fields:
+  `doc_type: lab_pdf` (or `intake_form`) and `document: @file({{fixture_pdf}})`
+  -- extracted fields come back in `extraction`, for answering only (chart
+  write-back stays behind the human-gated lock flow in "05 - Week 2
+  Ingestion").
+
+  Example success response (shape, not exact clinical content):
+  ```json
+  {
+    "ok": true,
+    "pid": 1,
+    "correlation_id": "0190f...-...-...-...-...",
+    "routed": ["evidence_retriever", "critic"],
+    "answer_status": "answered",
+    "refusal_message": null,
+    "degraded_reason": null,
+    "claims": [
+      { "text": "...", "claim_type": "lab_value", "citation_ids": ["..."], "numeric_values": [...], "flags": [], "order": 0, "emphasis": null }
+    ],
+    "verdicts": [ { "check": "citation_resolution", "passed": true, "skipped": false, "findings": [] } ],
+    "evidence": [ { "title": "...", "source": "...", "section": "...", "score": 0.87, "citation": { "source_type": "guideline", "...": "..." } } ],
+    "extraction": null
+  }
+  ```
+
+  `answer_status: "refused"` (with `refusal_message`) means the critic
+  blocked an uncited/unsafe draft -- its text never surfaces.
+  `answer_status: null` with `degraded_reason` set means the composer LLM
+  was unavailable: the run still returns the routed workers and cited
+  guideline evidence (the I6 degrade). Paste `correlation_id` into
+  `dashboard.php?correlation_id=...` (request 2) for the span waterfall:
+  supervisor -> worker(s) -> verify.
+}
+
+script:post-response {
+  const data = res.getBody();
+  if (data && data.correlation_id) {
+    bru.setVar("correlation_id", data.correlation_id);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("supervisor ran with logged handoffs", function () {
+    const data = res.getBody();
+    expect(data.ok, data.reason || "").to.equal(true);
+    expect(data.correlation_id).to.be.a("string").and.not.empty;
+    expect(data.routed).to.include("evidence_retriever");
+  });
+  test("critic gated any composed answer", function () {
+    const data = res.getBody();
+    if (data.answer_status === null) {
+      expect(data.degraded_reason).to.be.a("string");
+    } else {
+      expect(data.routed).to.include("critic");
+      expect(["answered", "refused", "frozen_sev1"]).to.include(data.answer_status);
+      expect(data.verdicts).to.be.an("array").that.is.not.empty;
+    }
+  });
+}

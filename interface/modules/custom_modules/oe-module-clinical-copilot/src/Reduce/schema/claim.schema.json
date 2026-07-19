@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-emr.org/schemas/clinical-copilot/claim.schema.json",
+  "title": "Clinical Co-Pilot Claim List",
+  "description": "The LLM output-contract shape (ARCHITECTURE.md §2.1): a list of claim objects the reduce pass and every chat turn must emit as structured output. This file is the human-readable mirror of OpenEMR\\Modules\\ClinicalCopilot\\Reduce\\Claim::jsonSchema() -- that method, not this file, is what is actually sent to the provider as `responseSchema` and used by Verify\\ClaimSchema (V1); keep the two in sync on any change.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["text", "claim_type", "citation_ids", "numeric_values", "flags"],
+    "properties": {
+      "text": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The narrated claim, verbatim as rendered (subject to V4 numeric grounding and V5 banned-claim lint)."
+      },
+      "claim_type": {
+        "type": "string",
+        "enum": [
+          "greeting",
+          "refusal",
+          "retrieval_status",
+          "uncertainty_statement",
+          "lab_value",
+          "trend",
+          "med_event",
+          "vital",
+          "overdue",
+          "pending",
+          "exclusion",
+          "conflict"
+        ],
+        "description": "Closed enum. Only greeting/refusal/retrieval_status/uncertainty_statement may legally carry zero citations (V2), and even then only if the text/numeric_values carry no clinical content."
+      },
+      "citation_ids": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 },
+        "description": "fact_id values this claim is grounded in. Must resolve against the session fact set (V2) and every resolved fact's pid must equal the pinned pid (V3)."
+      },
+      "numeric_values": {
+        "type": "array",
+        "items": { "type": "number" },
+        "description": "Every number the claim asserts, called out explicitly so V4 does not have to rely solely on regex-scraping free text."
+      },
+      "flags": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Open string set. `conflict` is the one flag V6 checks for: required on any claim citing a conflict-flagged fact."
+      },
+      "order": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "0-based position in the model's own output list -- ordering/emphasis metadata (§2.1)."
+      },
+      "emphasis": {
+        "type": ["string", "null"],
+        "description": "Free-form emphasis signal (e.g. \"high\"/\"normal\"), carried through to rendering. Never gates verification (§2.4: misleading emphasis is a named, uncaught residual)."
+      }
+    }
+  }
+}

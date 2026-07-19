@@ -1,0 +1,35 @@
+meta {
+  name: 8 - Medication List Upload
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/medication_upload.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  action: upload
+  pid: {{pid}}
+  csrf_token_form: {{csrf_token}}
+  document: @file({{fixture_pdf}})
+}
+
+docs {
+  Upload a medication list for an existing patient ({{pid}}) — the third
+  patient-attached document type. Each medication is transcribed exactly as
+  printed (name, dose, route, frequency, PRN flag, prescriber) into a draft and
+  the response 302-redirects to extraction_review.php?extraction_id=<id>.
+  Locking that review freezes the verified transcription and records
+  extraction accuracy but writes NOTHING to the chart's medication tables —
+  chart reconciliation is a deliberately deferred clinical step. With no model
+  configured the upload lands as a blank draft skeleton to complete by hand.
+}
+
+tests {
+  test("accepted", function () {
+    expect([200, 302]).to.include(res.getStatus());
+  });
+}

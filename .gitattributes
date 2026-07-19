@@ -50,3 +50,17 @@ Documentation/EHI_Export/schemaspy/schemas/* export-ignore
 Documentation/EHI_Export/schemaspy/schemas/openemr.meta.xml -export-ignore
 .phpstan/**/*.* text eol=lf
 .phpstan/*.* text eol=lf
+
+# Railway deploy scripts run inside an Alpine (busybox) container: a CRLF
+# checkout (e.g. on Windows with core.autocrlf) mangles the `#!/bin/sh` shebang
+# and the container fails with "not found" (exit 127) at build/boot. Force LF
+# so the same bytes ship regardless of the platform the deploy is driven from.
+Dockerfile.railway text eol=lf
+/railway-entrypoint.sh text eol=lf
+/railway-flex-bootstrap.sh text eol=lf
+/railway-preinstall-db.sh text eol=lf
+/railway-ensure-ssl.sh text eol=lf
+/railway-configure-apache.sh text eol=lf
+/railway-install-copilot.sh text eol=lf
+/patch-flex-openemr.sh text eol=lf
+docker/railway/*.sh text eol=lf

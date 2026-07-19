@@ -1,0 +1,15 @@
+# Docker build context for Railway flex wrapper only.
+# Every script the Dockerfile.railway COPY references MUST be un-ignored here,
+# or a cache-missing (fresh) build fails at COPY with "file not found in build
+# context" and Railway silently falls back to the last image. Keep this list in
+# sync with the COPY line in Dockerfile.railway.
+*
+
+!Dockerfile.railway
+!railway-entrypoint.sh
+!railway-flex-bootstrap.sh
+!railway-preinstall-db.sh
+!railway-ensure-ssl.sh
+!railway-configure-apache.sh
+!railway-install-copilot.sh
+!patch-flex-openemr.sh

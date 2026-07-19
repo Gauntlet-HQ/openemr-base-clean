@@ -1,0 +1,930 @@
+[
+  {
+    "id": "ext-intake-01",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "first_name",
+          "value": "Ada",
+          "page": 1,
+          "quote": "Patient: Ada Lovelace",
+          "confidence": 0.98,
+          "bbox": [
+            80,
+            120,
+            240,
+            150
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-02",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "last_name",
+          "value": "Lovelace",
+          "page": 1,
+          "quote": "Patient: Ada Lovelace",
+          "bbox": [
+            240,
+            120,
+            360,
+            150
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-03",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "date_of_birth",
+          "value": "1975-03-02",
+          "page": 1,
+          "quote": "DOB: 03/02/1975"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-04",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "sex",
+          "value": "F",
+          "page": 1,
+          "quote": "Sex: Female"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-05",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "chief_concern",
+          "value": "follow-up diabetes",
+          "page": 1,
+          "quote": "Reason for visit: diabetes follow-up"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-06",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "current_medications",
+          "value": "metformin 1000mg BID",
+          "page": 2,
+          "quote": "Meds: metformin 1000mg twice daily"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-07",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "allergies",
+          "value": "penicillin",
+          "page": 2,
+          "quote": "Allergies: penicillin (rash)"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-intake-08",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "first_name",
+          "value": "Grace",
+          "page": 1,
+          "quote": "Name: Grace Hopper"
+        },
+        {
+          "field_key": "family_history",
+          "value": "mother: type 2 diabetes",
+          "page": 2,
+          "quote": "FH: mother T2DM"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-lab-01",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Hemoglobin A1c",
+          "value": "7.8",
+          "unit": "%",
+          "reference_range": "4.0-5.6",
+          "abnormal_flag": "H",
+          "page": 1,
+          "quote": "HbA1c 7.8 % (H) ref 4.0-5.6",
+          "bbox": [
+            60,
+            300,
+            520,
+            330
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-lab-02",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Glucose, fasting",
+          "value": "142",
+          "unit": "mg/dL",
+          "reference_range": "70-99",
+          "abnormal_flag": "H",
+          "page": 1,
+          "quote": "Glucose 142 mg/dL H"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-lab-03",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "LDL Cholesterol",
+          "value": "118",
+          "unit": "mg/dL",
+          "reference_range": "<100",
+          "abnormal_flag": "H",
+          "page": 1,
+          "quote": "LDL 118 mg/dL"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-lab-04",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Triglycerides",
+          "value": "160",
+          "unit": "mg/dL",
+          "reference_range": "<150",
+          "abnormal_flag": "H",
+          "page": 1,
+          "quote": "Trig 160"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-lab-05",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "eGFR",
+          "value": "88",
+          "unit": "mL/min/1.73m2",
+          "reference_range": ">60",
+          "abnormal_flag": "N",
+          "page": 2,
+          "quote": "eGFR 88"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-lab-06",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Urine ACR",
+          "value": "42",
+          "unit": "mg/g",
+          "reference_range": "<30",
+          "abnormal_flag": "H",
+          "page": 2,
+          "quote": "UACR 42 mg/g"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-med-01",
+    "category": "extraction",
+    "doc_type": "medication_list",
+    "input": {
+      "fields": [
+        {
+          "field_key": "medication_name",
+          "value": "Metformin",
+          "page": 1,
+          "quote": "Metformin 500 mg PO BID"
+        },
+        {
+          "field_key": "dose",
+          "value": "500 mg",
+          "page": 1,
+          "quote": "Metformin 500 mg PO BID"
+        },
+        {
+          "field_key": "route",
+          "value": "PO",
+          "page": 1,
+          "quote": "Metformin 500 mg PO BID"
+        },
+        {
+          "field_key": "frequency",
+          "value": "BID",
+          "page": 1,
+          "quote": "Metformin 500 mg PO BID"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    },
+    "note": "one medication as a document-order attribute run, transcribed verbatim"
+  },
+  {
+    "id": "ext-med-02",
+    "category": "extraction",
+    "doc_type": "medication_list",
+    "input": {
+      "fields": [
+        {
+          "field_key": "medication_name",
+          "value": "Lisinopril",
+          "page": 1,
+          "quote": "Lisinopril 10 mg daily"
+        },
+        {
+          "field_key": "dose",
+          "value": "10 mg",
+          "page": 1,
+          "quote": "Lisinopril 10 mg daily"
+        },
+        {
+          "field_key": "frequency",
+          "value": "daily",
+          "page": 1,
+          "quote": "Lisinopril 10 mg daily"
+        },
+        {
+          "field_key": "prescriber",
+          "value": "Dr. A. Chen",
+          "page": 2,
+          "quote": "Prescriber: Dr. A. Chen"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "ext-bad-01",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Hemoglobin A1c",
+          "value": "7.8",
+          "unit": "%",
+          "reference_range": "4.0-5.6",
+          "quote": "HbA1c 7.8"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "missing page (citation required)"
+  },
+  {
+    "id": "ext-bad-02",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Glucose",
+          "value": "99",
+          "unit": "mg/dL",
+          "reference_range": "70-99",
+          "page": 1
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "missing quote (citation required)"
+  },
+  {
+    "id": "ext-bad-03",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "social_security_number",
+          "value": "xxx",
+          "page": 1,
+          "quote": "SSN"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "field_key outside intake enum"
+  },
+  {
+    "id": "ext-bad-04",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "first_name",
+          "page": 1,
+          "quote": "Name"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "value key absent (must be present, may be null)"
+  },
+  {
+    "id": "ext-bad-05",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "first_name",
+          "value": "Ada",
+          "page": 1,
+          "quote": "Name",
+          "confidence": 1.9
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "confidence out of [0,1]"
+  },
+  {
+    "id": "ext-bad-06",
+    "category": "extraction",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "A1c",
+          "value": "7",
+          "unit": "%",
+          "reference_range": "4-5.6",
+          "page": 0,
+          "quote": "A1c"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "page must be >= 1"
+  },
+  {
+    "id": "ext-bad-07",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": "not-an-array"
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "fields not an array"
+  },
+  {
+    "id": "ext-bad-08",
+    "category": "extraction",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "",
+          "value": "x",
+          "page": 1,
+          "quote": "q"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "empty field_key"
+  },
+  {
+    "id": "ext-med-bad-01",
+    "category": "extraction",
+    "doc_type": "medication_list",
+    "input": {
+      "fields": [
+        {
+          "field_key": "medication_name",
+          "value": "Metformin",
+          "page": "2",
+          "quote": "Metformin"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "quoted page string on a valued field (uncheckable citation, global page rule)"
+  },
+  {
+    "id": "ext-med-bad-02",
+    "category": "extraction",
+    "doc_type": "medication_list",
+    "input": {
+      "fields": [
+        {
+          "field_key": "strength",
+          "value": "500 mg"
+        }
+      ]
+    },
+    "expect": {
+      "accept": false
+    },
+    "note": "field_key outside the closed medication attribute enum"
+  },
+  {
+    "id": "miss-01",
+    "category": "missing_data",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "family_history",
+          "value": null,
+          "page": 2,
+          "quote": "Family history: (blank)"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    },
+    "note": "blank field kept null, not invented"
+  },
+  {
+    "id": "miss-02",
+    "category": "missing_data",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "allergies",
+          "value": null,
+          "page": 2,
+          "quote": "Allergies: ____"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "miss-03",
+    "category": "missing_data",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "email",
+          "value": null,
+          "page": 1,
+          "quote": "Email:"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "miss-04",
+    "category": "missing_data",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "phone",
+          "value": null,
+          "page": 1,
+          "quote": "Phone: illegible"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "miss-05",
+    "category": "missing_data",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "Vitamin D",
+          "value": null,
+          "unit": null,
+          "reference_range": null,
+          "page": 1,
+          "quote": "Vitamin D: pending"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    },
+    "note": "pending result, no value"
+  },
+  {
+    "id": "miss-06",
+    "category": "missing_data",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "TSH",
+          "value": null,
+          "unit": "mIU/L",
+          "reference_range": "0.4-4.0",
+          "page": 1,
+          "quote": "TSH: see addendum"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "miss-07",
+    "category": "missing_data",
+    "doc_type": "intake_form",
+    "input": {
+      "fields": [
+        {
+          "field_key": "chief_concern",
+          "value": "annual visit",
+          "page": 1,
+          "quote": "Reason: annual"
+        },
+        {
+          "field_key": "current_medications",
+          "value": null,
+          "page": 2,
+          "quote": "Meds: none listed"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    }
+  },
+  {
+    "id": "miss-08",
+    "category": "missing_data",
+    "doc_type": "lab_pdf",
+    "input": {
+      "fields": [
+        {
+          "field_key": "HDL Cholesterol",
+          "value": "50",
+          "unit": "mg/dL",
+          "reference_range": ">40",
+          "abnormal_flag": null,
+          "page": 1,
+          "quote": "HDL 50"
+        }
+      ]
+    },
+    "expect": {
+      "accept": true
+    },
+    "note": "null abnormal flag is allowed"
+  },
+  {
+    "id": "ref-01",
+    "category": "refusal",
+    "doc_type": "lab_pdf",
+    "raw": "I cannot read this document.",
+    "expect": {
+      "refuse": true
+    },
+    "note": "non-JSON model output"
+  },
+  {
+    "id": "ref-02",
+    "category": "refusal",
+    "doc_type": "lab_pdf",
+    "raw": "",
+    "expect": {
+      "refuse": true
+    },
+    "note": "empty output"
+  },
+  {
+    "id": "ref-03",
+    "category": "refusal",
+    "doc_type": "lab_pdf",
+    "raw": "{\"foo\":1}",
+    "expect": {
+      "refuse": true
+    },
+    "note": "JSON but no fields array"
+  },
+  {
+    "id": "ref-04",
+    "category": "refusal",
+    "doc_type": "lab_pdf",
+    "raw": "{\"fields\":[{\"field_key\":\"A1c\",\"value\":\"7.8\"}]}",
+    "expect": {
+      "refuse": true
+    },
+    "note": "JSON but missing citation (page/quote)"
+  },
+  {
+    "id": "ref-05",
+    "category": "refusal",
+    "doc_type": "intake_form",
+    "raw": "{\"fields\":[{\"field_key\":\"blood_type\",\"value\":\"x\",\"page\":1,\"quote\":\"q\"}]}",
+    "expect": {
+      "refuse": true
+    },
+    "note": "field_key outside intake enum (ssn is now a collected field; blood_type is not)"
+  },
+  {
+    "id": "ref-06",
+    "category": "refusal",
+    "doc_type": "lab_pdf",
+    "raw": "```json\n{ truncated",
+    "expect": {
+      "refuse": true
+    },
+    "note": "truncated / malformed JSON"
+  },
+  {
+    "id": "ref-07",
+    "category": "refusal",
+    "doc_type": "intake_form",
+    "raw": "{\"fields\":[{\"field_key\":\"first_name\",\"value\":\"Ada\",\"page\":\"one\",\"quote\":\"q\"}]}",
+    "expect": {
+      "refuse": true
+    },
+    "note": "page not an integer"
+  },
+  {
+    "id": "ref-08",
+    "category": "refusal",
+    "doc_type": "lab_pdf",
+    "raw": "[]",
+    "expect": {
+      "refuse": true
+    },
+    "note": "array, not the object contract"
+  },
+  {
+    "id": "ret-01",
+    "category": "retrieval",
+    "query": "what is the A1c goal for this patient",
+    "tags": [
+      "a1c"
+    ],
+    "expect": {
+      "top_chunk": "ada-a1c-target"
+    }
+  },
+  {
+    "id": "ret-02",
+    "category": "retrieval",
+    "query": "how often should A1c be checked",
+    "tags": [
+      "monitoring"
+    ],
+    "expect": {
+      "top_chunk": "ada-a1c-monitoring"
+    }
+  },
+  {
+    "id": "ret-03",
+    "category": "retrieval",
+    "query": "statin therapy for diabetes",
+    "tags": [
+      "statin"
+    ],
+    "expect": {
+      "top_chunk": "ada-lipid-statin"
+    }
+  },
+  {
+    "id": "ret-04",
+    "category": "retrieval",
+    "query": "elevated triglycerides management",
+    "tags": [
+      "triglycerides"
+    ],
+    "expect": {
+      "top_chunk": "ada-triglycerides"
+    }
+  },
+  {
+    "id": "ret-05",
+    "category": "retrieval",
+    "query": "annual kidney screening albumin",
+    "tags": [
+      "acr"
+    ],
+    "expect": {
+      "top_chunk": "ada-uacr-screening"
+    }
+  },
+  {
+    "id": "ret-06",
+    "category": "retrieval",
+    "query": "blood pressure target in diabetes",
+    "tags": [
+      "blood_pressure"
+    ],
+    "expect": {
+      "top_chunk": "ada-blood-pressure"
+    }
+  },
+  {
+    "id": "ret-07",
+    "category": "retrieval",
+    "query": "first line medication for type 2 diabetes",
+    "tags": [
+      "metformin"
+    ],
+    "expect": {
+      "top_chunk_any": [
+        "ada-metformin-first-line",
+        "lit-metformin-first-line"
+      ]
+    }
+  },
+  {
+    "id": "ret-08",
+    "category": "retrieval",
+    "query": "asking about hypoglycemia on insulin",
+    "tags": [
+      "hypoglycemia"
+    ],
+    "expect": {
+      "top_chunk": "ada-hypoglycemia"
+    }
+  },
+  {
+    "id": "ret-09",
+    "category": "retrieval",
+    "query": "LDL cholesterol reduction target",
+    "tags": [
+      "ldl"
+    ],
+    "expect": {
+      "top_chunk": "ada-lipid-statin"
+    }
+  },
+  {
+    "id": "ret-10",
+    "category": "retrieval",
+    "query": "glycemic goal below 7 percent",
+    "tags": [
+      "glycemic"
+    ],
+    "expect": {
+      "top_chunk": "ada-a1c-target"
+    }
+  },
+  {
+    "id": "ret-11",
+    "category": "retrieval",
+    "query": "SGLT2 inhibitor cardiovascular benefit",
+    "tags": [
+      "sglt2"
+    ],
+    "expect": {
+      "top_chunk": "ada-metformin-first-line"
+    }
+  },
+  {
+    "id": "ret-12",
+    "category": "retrieval",
+    "query": "urine albumin creatinine ratio threshold",
+    "tags": [
+      "uacr"
+    ],
+    "expect": {
+      "top_chunk": "ada-uacr-screening"
+    }
+  }
+]

@@ -1,0 +1,137 @@
+{
+    "pubpid": "CCP-003",
+    "pid": 3,
+    "label": "Corrected lab both variants (in-place + new-row) + censored <7.0 A1c + unitless glucose",
+    "facts": [
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "result",
+            "pid": 3,
+            "clinical_date": "2026-05-08",
+            "date_source": "collected",
+            "value": {
+                "raw": "8.1",
+                "parsed": 8.1,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "corrected",
+            "flags": [
+                "superseded_1"
+            ],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 9,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "In-place correction: same procedure_result_id row, UPDATEd from final/7.9 to corrected/8.1. Citation notes \"supersedes 1 prior result(s)\" against its own prior state."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "result",
+            "pid": 3,
+            "clinical_date": "2026-06-07",
+            "date_source": "collected",
+            "value": {
+                "raw": "7.8",
+                "parsed": 7.8,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "corrected",
+            "flags": [
+                "superseded_1"
+            ],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 11,
+                    "field": "result",
+                    "date_source": "collected"
+                },
+                {
+                    "table": "procedure_result",
+                    "pk": 10,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "New-row correction: two procedure_result rows share result_code+clinical date; the corrected row (higher procedure_result_id) wins per C2 supersession and cites the one it supersedes."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "result",
+            "pid": 3,
+            "clinical_date": "2026-06-22",
+            "date_source": "collected",
+            "value": {
+                "raw": "<7.0",
+                "parsed": 7.0,
+                "comparator": "lt",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [
+                "censored"
+            ],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 12,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Censored comparator value: only supports the claim its direction proves (\"below 7.0\"), plotted with a marker, never presented as an exact value; NOT a trend point in the strict numeric sense."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "exclusion",
+            "pid": 3,
+            "clinical_date": "2026-07-02",
+            "date_source": "collected",
+            "value": {
+                "raw": "110",
+                "parsed": null,
+                "comparator": "none",
+                "unit_original": "",
+                "unit_canonical": null,
+                "conversion_version": null
+            },
+            "status": "excluded",
+            "flags": [
+                "excluded_reason:unitless"
+            ],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 13,
+                    "field": "units",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "No unit, no math (C4, strict): empty units -> verbatim presentation only, excluded from thresholds/trends, counted in the per-analyte unitless-exclusion-rate, visible as an exclusion fact (I5) -- never guessed as mg/dL."
+        }
+    ]
+}

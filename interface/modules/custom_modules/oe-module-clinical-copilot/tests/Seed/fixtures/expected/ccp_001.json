@@ -1,0 +1,167 @@
+{
+    "pubpid": "CCP-001",
+    "pid": 1,
+    "label": "Rising A1c + metformin dose-response mismatch + overdue ACR (no pending order)",
+    "facts": [
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 1,
+            "clinical_date": "2025-07-07",
+            "date_source": "collected",
+            "value": {
+                "raw": "7.2",
+                "parsed": 7.2,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 1,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "One of four rising A1c draws (7.2 -> 8.4 over 12mo -> 3mo ago); trend must read as rising."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 1,
+            "clinical_date": "2025-10-07",
+            "date_source": "collected",
+            "value": {
+                "raw": "7.6",
+                "parsed": 7.6,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 2,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "One of four rising A1c draws (7.2 -> 8.4 over 12mo -> 3mo ago); trend must read as rising."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 1,
+            "clinical_date": "2026-01-07",
+            "date_source": "collected",
+            "value": {
+                "raw": "8.0",
+                "parsed": 8.0,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 3,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "One of four rising A1c draws (7.2 -> 8.4 over 12mo -> 3mo ago); trend must read as rising."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "control_proxy",
+            "capability_version": "1",
+            "kind": "trend_point",
+            "pid": 1,
+            "clinical_date": "2026-04-07",
+            "date_source": "collected",
+            "value": {
+                "raw": "8.4",
+                "parsed": 8.4,
+                "comparator": "none",
+                "unit_original": "%",
+                "unit_canonical": "%",
+                "conversion_version": null
+            },
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 4,
+                    "field": "result",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "One of four rising A1c draws (7.2 -> 8.4 over 12mo -> 3mo ago); trend must read as rising."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "med_response",
+            "capability_version": "1",
+            "kind": "med_event",
+            "pid": 1,
+            "clinical_date": "2026-03-07",
+            "date_source": "collected",
+            "value": null,
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "prescriptions",
+                    "pk": 2,
+                    "field": "start_date",
+                    "date_source": "collected"
+                }
+            ],
+            "note": "Metformin increased 500mg->1000mg 4 months ago; the next A1c draw (3mo ago, 8.4) still rose. Capability must pair the two series and NEVER assert causation."
+        },
+        {
+            "fact_id": null,
+            "fact_id_note": "computed by U3 content-address digest: hash(capability, kind, citations, canonical value); not knowable before U3 exists",
+            "capability": "overdue_tests",
+            "capability_version": "1",
+            "kind": "overdue_item",
+            "pid": 1,
+            "clinical_date": "2025-05-07",
+            "date_source": "collected",
+            "value": null,
+            "status": "final",
+            "flags": [],
+            "citations": [
+                {
+                    "table": "procedure_result",
+                    "pk": 5,
+                    "field": null,
+                    "date_source": "collected"
+                }
+            ],
+            "note": "ACR last drawn 14 months ago; cadence is P1Y; no newer draw and no pending order exists -> plain overdue, reorder note should NOT be suppressed."
+        }
+    ]
+}

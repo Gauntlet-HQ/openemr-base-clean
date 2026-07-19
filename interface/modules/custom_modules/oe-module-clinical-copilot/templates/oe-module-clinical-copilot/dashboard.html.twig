@@ -1,0 +1,526 @@
+{#
+# Clinical Co-Pilot -- observability dashboard (U12, ARCHITECTURE.md §3.3).
+#
+# Auto-refreshing via a plain meta-refresh (kept deliberately simple --
+# a dashboard that must never itself become a debugging problem). Click-
+# through chain: metric tile links to the filtered request list below ->
+# each request row links to its span waterfall (?correlation_id=...) ->
+# each span with a payload_ref links to that payload's full content
+# (?payload_ref=...). All server-rendered, in-app, ACL-gated.
+#
+# Autoescape is globally OFF for this project -- every dynamic value below
+# is explicitly escaped with |text, |attr, |xlt, or |xla.
+#
+# @package   OpenEMR
+# @link      https://www.open-emr.org
+# @author    Clinical Co-Pilot Team
+# @copyright Copyright (c) 2026 OpenEMR Foundation
+# @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+#}
+<html>
+<head>
+    <title>{{ "Clinical Co-Pilot -- Observability"|xlt }}</title>
+    {{ setupHeader() }}
+    {# Auto-refresh carrying THIS session's own site id (dashboard_url_site).
+       Because it is the session's OWN site it always matches $_SESSION['site_id']
+       (never trips the multisite session-clear guard), and if the session has
+       since expired it redirects to login instead of throwing a 400. #}
+    <meta http-equiv="refresh" content="{{ refresh_seconds }};url={{ dashboard_url_site|attr }}">
+    <style>
+        .ccp-tile { border: 1px solid #dee2e6; border-radius: 4px; padding: 0.75rem; margin-bottom: 0.75rem; }
+        .ccp-tile h6 { color: #6c757d; font-size: 0.8em; text-transform: uppercase; margin-bottom: 0.25rem; }
+        .ccp-tile .ccp-value { font-size: 1.5em; font-weight: 600; }
+        .ccp-waterfall td, .ccp-waterfall th { font-size: 0.85em; }
+        .ccp-payload { white-space: pre-wrap; word-break: break-word; font-size: 0.8em; background: #f8f9fa; padding: 0.5rem; }
+    </style>
+</head>
+<body class="body_top">
+{# OpenEMR's tab bar labels a tab from the first .title element in the
+   loaded page (interface/main/tabs/js/custom_bindings.js); without one
+   the tab reads "Unknown". Hidden: the visible layout has its own heading. #}
+<span class="title" style="display: none">{{ "Co-Pilot Dashboard"|xlt }}</span>
+<div class="container-fluid mt-3">
+    <h4><i class="fa fa-line-chart mr-2"></i>{{ "Clinical Co-Pilot -- Observability"|xlt }}
+        <small class="text-muted">{{ "window: last"|xlt }} {{ window_hours }}h &middot; {{ "auto-refreshes every"|xlt }} {{ (refresh_seconds / 60)|round }} {{ "min"|xlt }}</small>
+        <a href="{{ dashboard_url_site|attr }}" class="btn btn-outline-secondary btn-sm ml-2"><i class="fa fa-refresh mr-1"></i>{{ "Refresh"|xlt }}</a>
+    </h4>
+
+    {% if alerts is not empty %}
+        <div class="alert alert-danger">
+            <strong>{{ "Firing alerts"|xlt }}:</strong>
+            <ul class="mb-0">
+                {% for a in alerts %}
+                    <li>[{{ a.started_at|text }}] <strong>{{ a.alert|text }}</strong>: {{ a.message|text }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header"><strong>{{ "Circuit breaker & readiness"|xlt }}</strong></div>
+        <div class="card-body">
+            <p>
+                {{ "Breaker"|xlt }}:
+                <span class="badge {{ breaker.open ? 'badge-danger' : 'badge-success' }}">{{ breaker.open ? "OPEN"|xlt : "closed"|xlt }}</span>
+                {% if breaker.reason %}<span class="text-muted small">{{ breaker.reason|text }}</span>{% endif %}
+                &middot; {{ "DB"|xlt }}: <span class="badge {{ ready.db == 'ok' ? 'badge-success' : 'badge-danger' }}">{{ ready.db|text }}</span>
+                &middot; {{ "tables writable"|xlt }}: <span class="badge {{ ready.tables_writable == 'ok' ? 'badge-success' : 'badge-danger' }}">{{ ready.tables_writable|text }}</span>
+                &middot; {{ "LLM"|xlt }}: <span class="badge {{ ready.llm == 'ok' ? 'badge-success' : 'badge-warning' }}">{{ ready.llm|text }}</span>
+                &middot; {{ "worker heartbeat"|xlt }}: <span class="badge {{ ready.worker_heartbeat == 'ok' ? 'badge-success' : 'badge-warning' }}">{{ ready.worker_heartbeat|text }}</span>
+                &middot; {{ "document store"|xlt }}: <span class="badge {{ ready.document_store == 'ok' ? 'badge-success' : (ready.document_store == 'remote-unprobed' ? 'badge-secondary' : 'badge-warning') }}">{{ ready.document_store|text }}</span>
+                &middot; {{ "reranker"|xlt }}: <span class="badge badge-success">{{ ready.reranker|text }}</span>
+            </p>
+            <p class="mb-1">
+                {{ "Knowledge store (RAG, PHI-free, separate DB)"|xlt }}:
+                {% if knowledge.state == 'ok' %}
+                    <span class="badge badge-success">{{ "connected"|xlt }}</span>
+                    <span class="text-muted small">{{ knowledge.chunk_count }} {{ "guideline chunks"|xlt }}</span>
+                {% elseif knowledge.state == 'unreachable' %}
+                    <span class="badge badge-warning">{{ "unreachable"|xlt }}</span>
+                    <span class="text-muted small">{{ "configured but not responding — evidence degrades to empty"|xlt }}</span>
+                {% elseif knowledge.state == 'driver_missing' %}
+                    <span class="badge badge-warning">{{ "driver missing"|xlt }}</span>
+                    <span class="text-muted small">{{ "configured, but pdo_pgsql is not loaded in the web SAPI — enable it for Apache/mod_php"|xlt }}</span>
+                {% else %}
+                    <span class="badge badge-secondary">{{ "offline corpus"|xlt }}</span>
+                    <span class="text-muted small">{{ "no external DB configured — using the in-repo guideline corpus"|xlt }}</span>
+                {% endif %}
+            </p>
+            <p class="text-muted small">
+                {{ "Rate limits"|xlt }}: {{ "max active sessions/user"|xlt }}={{ limits.max_active_sessions_per_user }},
+                {{ "max turns/user/hr"|xlt }}={{ limits.max_turns_per_user_per_hour }},
+                {{ "daily spend cap"|xlt }}=${{ limits.daily_llm_spend_cap_usd }},
+                {{ "hourly burn cap"|xlt }}=${{ limits.hourly_llm_burn_cap_usd }}
+            </p>
+            <form method="post" action="{{ dashboard_url_site|attr }}" class="form-inline">
+                {# See doc.html.twig's Regenerate form for why the field name is
+                   pinned explicitly: csrfToken()'s own default ("_token") does not
+                   match dashboard.php's CsrfUtils::checkCsrfInput() default key
+                   ("csrf_token_form"); left as the default it silently 403s the
+                   breaker force-open/reset actions. #}
+                {{ csrfToken('default', 'csrf_token_form') }}
+                {% if breaker.open %}
+                    <input type="hidden" name="action" value="breaker_reset">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">{{ "Manual reset (ACL-gated, audit-logged)"|xlt }}</button>
+                {% else %}
+                    <input type="hidden" name="action" value="breaker_force_open">
+                    <input type="text" name="reason" class="form-control form-control-sm mr-2" placeholder="{{ 'reason'|attr }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ "Force breaker open"|xlt }}</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>{{ "Evals — 54-case boolean-rubric gate"|xlt }}</strong>
+            <form method="post" action="{{ dashboard_url_site|attr }}" class="form-inline mb-0">
+                {# Same pinned CSRF field name as the breaker form above. #}
+                {{ csrfToken('default', 'csrf_token_form') }}
+                <input type="hidden" name="action" value="run_evals">
+                <button type="submit" class="btn btn-sm btn-primary">{{ "Run evals"|xlt }}</button>
+            </form>
+        </div>
+        <div class="card-body">
+            {% if eval_error %}
+                <div class="alert alert-danger mb-0">{{ eval_error|text }}</div>
+            {% elseif eval_result %}
+                <p class="mb-2">
+                    <span class="badge {{ eval_result.passed ? 'badge-success' : 'badge-danger' }}">
+                        {{ eval_result.passed ? "GATE PASSED"|xlt : "GATE FAILED"|xlt }}
+                    </span>
+                    <span class="text-muted small">{{ eval_result.case_count }} {{ "cases · deterministic, no live model or DB"|xlt }}</span>
+                </p>
+                <table class="table table-sm mb-2">
+                    <thead><tr><th>{{ "Rubric"|xlt }}</th><th>{{ "Pass rate"|xlt }}</th><th>{{ "Pass/Total"|xlt }}</th><th>{{ "Baseline"|xlt }}</th></tr></thead>
+                    <tbody>
+                    {% for rubric, rate in eval_result.rates %}
+                        <tr>
+                            <td>{{ rubric|text }}</td>
+                            <td>
+                                <span class="badge {{ rate >= 0.9 ? 'badge-success' : 'badge-danger' }}">{{ (rate * 100)|round(1) }}%</span>
+                            </td>
+                            <td>{{ eval_result.tally[rubric].pass }}/{{ eval_result.tally[rubric].total }}</td>
+                            <td class="text-muted">{{ eval_result.baseline[rubric] is defined ? (eval_result.baseline[rubric] * 100)|round(1) ~ '%' : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% if eval_category_summary is not empty %}
+                    <div class="mb-2">
+                        <span class="text-muted small">{{ "Golden set by category"|xlt }}:</span>
+                        {% for category, tally in eval_category_summary %}
+                            <span class="badge {{ tally.passed == tally.total ? 'badge-success' : 'badge-warning' }} mr-1">
+                                {{ category|text }} {{ tally.passed }}/{{ tally.total }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if eval_result.cases is not empty %}
+                    <details class="mb-2">
+                        <summary class="small text-muted" style="cursor: pointer">{{ "Show all"|xlt }} {{ eval_result.cases|length }} {{ "cases"|xlt }}</summary>
+                        <table class="table table-sm table-striped mt-2 mb-0">
+                            <thead><tr><th>{{ "Case"|xlt }}</th><th>{{ "Category"|xlt }}</th><th>{{ "Rubrics"|xlt }}</th></tr></thead>
+                            <tbody>
+                            {% for case in eval_result.cases %}
+                                <tr>
+                                    <td class="small"><code>{{ case.id|text }}</code></td>
+                                    <td class="small">{{ case.category|text }}</td>
+                                    <td class="small">
+                                        {% for rubric, passed in case.rubrics %}
+                                            <span class="badge {{ passed ? 'badge-success' : 'badge-danger' }} mr-1" title="{{ rubric|attr }}">
+                                                {{ passed ? '✓' : '✗' }} {{ rubric|text }}
+                                            </span>
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </details>
+                {% endif %}
+                {% if eval_result.regressions is not empty %}
+                    <div class="alert alert-danger py-2 mb-0">
+                        <strong>{{ "Regressions"|xlt }}:</strong>
+                        <ul class="mb-0">
+                            {% for r in eval_result.regressions %}<li class="small">{{ r|text }}</li>{% endfor %}
+                        </ul>
+                    </div>
+                {% else %}
+                    <p class="text-muted small mb-0">{{ "No regressions vs. baseline."|xlt }}
+                        {% if eval_result.failures is not empty %}{{ eval_result.failures|length }} {{ "individual case failure(s) — still within tolerance."|xlt }}{% endif %}
+                    </p>
+                {% endif %}
+            {% else %}
+                <p class="text-muted mb-0">{{ "Press \"Run evals\" to run the 54-case gate now — the same deterministic engine CI uses (ops/eval/run-evals.php). No live model or database is touched."|xlt }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>{{ "Load test — in-process, 50 workers"|xlt }}</strong>
+            <form method="post" action="{{ dashboard_url_site|attr }}" class="form-inline mb-0">
+                {{ csrfToken('default', 'csrf_token_form') }}
+                <input type="hidden" name="action" value="run_load_test">
+                <button type="submit" class="btn btn-sm btn-primary">{{ "Run load test"|xlt }}</button>
+            </form>
+        </div>
+        <div class="card-body">
+            {# Load-test mode: temporary, auto-reverting lift of the per-user chat caps. #}
+            {% if load_test_mode.active %}
+                <div class="alert alert-warning d-flex justify-content-between align-items-center py-2">
+                    <span>
+                        <strong>{{ "Load-test mode ON"|xlt }}</strong> —
+                        {{ "per-user chat caps lifted; daily/hourly $ caps + breaker still enforced. Auto-reverts in"|xlt }}
+                        ~{{ (load_test_mode.seconds_remaining / 60)|round }} {{ "min"|xlt }}.
+                    </span>
+                    <form method="post" action="{{ dashboard_url_site|attr }}" class="mb-0">
+                        {{ csrfToken('default', 'csrf_token_form') }}
+                        <input type="hidden" name="action" value="disable_load_test">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">{{ "Disable now"|xlt }}</button>
+                    </form>
+                </div>
+            {% else %}
+                <form method="post" action="{{ dashboard_url_site|attr }}" class="form-inline mb-2">
+                    {{ csrfToken('default', 'csrf_token_form') }}
+                    <input type="hidden" name="action" value="enable_load_test">
+                    <button type="submit" class="btn btn-sm btn-outline-warning">{{ "Enable load-test mode (30 min)"|xlt }}</button>
+                    <span class="text-muted small ml-2">{{ "Temporarily lifts the per-user chat throttle so a chat load test isn't rate-limited; auto-reverts after 30 min. $ spend caps + breaker stay on."|xlt }}</span>
+                </form>
+            {% endif %}
+
+            {% if load_test_error %}
+                <div class="alert alert-danger mb-0">{{ load_test_error|text }}</div>
+            {% elseif load_test_result %}
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>{{ "Workload"|xlt }}</th><th>{{ "Conc"|xlt }}</th><th>{{ "Throughput (ops/s)"|xlt }}</th><th>p50</th><th>p95</th><th>p99</th><th>{{ "CPU"|xlt }}</th><th>{{ "RSS (MB)"|xlt }}</th></tr></thead>
+                    <tbody>
+                    {% for r in load_test_result %}
+                        <tr>
+                            <td>{{ r.workload|text }}</td>
+                            <td>{{ r.concurrency }}</td>
+                            <td>{{ r.throughput_ops_sec }}</td>
+                            <td>{{ r.latency_ms.p50 }}ms</td>
+                            <td>{{ r.latency_ms.p95 }}ms</td>
+                            <td>{{ r.latency_ms.p99 }}ms</td>
+                            <td>{{ r.cpu.pct_of_all_cores }}%</td>
+                            <td>{{ r.memory.aggregate_rss_hwm_mb }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <p class="text-muted small mb-0 mt-1">{{ "In-process module compute at 50 parallel workers (retrieval + verify). Not the full HTTP stack — for that run ops/load/k6 against the deployment (RESULTS.md Part B)."|xlt }}</p>
+            {% else %}
+                <p class="text-muted mb-0">{{ "Press \"Run load test\" for real throughput/latency/CPU/memory at 50 concurrent workers (ops/load/bench). Measures module compute; the full HTTP 50-user test is k6 (RESULTS.md Part B)."|xlt }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Requests (window)"|xlt }}</h6>
+            <div class="ccp-value">
+                {{ "chat"|xlt }}: <a href="{{ dashboard_url|attr }}?kind=chat_turn">{{ metrics.requests_by_kind.chat_turn }}</a>
+                &middot; {{ "synthesis"|xlt }}: <a href="{{ dashboard_url|attr }}?kind=render">{{ metrics.requests_by_kind.render }}</a>
+            </div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Error rate"|xlt }}</h6>
+            <div class="ccp-value"><a href="{{ dashboard_url|attr }}?status=error">{{ metrics.error_rate_pct }}%</a></div>
+            <small class="text-muted">{{ metrics.error_count }} {{ "errors"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Cache (digest) hit rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.cache_hit_rate_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Degradations"|xlt }}</h6>
+            <div class="ccp-value"><a href="{{ dashboard_url|attr }}?status=degraded">{{ metrics.degradation_count }}</a></div>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6"><div class="ccp-tile">
+            <h6>{{ "Latency p50/p95 per step (ms)"|xlt }}</h6>
+            <table class="table table-sm mb-0">
+                <thead><tr><th>{{ "Kind"|xlt }}</th><th>p50</th><th>p95</th><th>n</th></tr></thead>
+                <tbody>
+                {% for kind, stats in metrics.latency_percentiles_by_kind %}
+                    <tr><td>{{ kind|text }}</td><td>{{ stats.p50 }}</td><td>{{ stats.p95 }}</td><td>{{ stats.count }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div></div>
+        <div class="col-md-6"><div class="ccp-tile">
+            <h6>
+                {{ "Verification by check"|xlt }}
+                {% if verify_gate_enforced %}
+                    <span class="badge badge-success">{{ "content gate enforced"|xlt }}</span>
+                {% else %}
+                    <span class="badge badge-secondary">{{ "content gate advisory"|xlt }}</span>
+                {% endif %}
+            </h6>
+            <table class="table table-sm mb-0">
+                <thead><tr><th>{{ "Check"|xlt }}</th><th>{{ "Status"|xlt }}</th><th>{{ "Passed"|xlt }}</th><th>{{ "Failed"|xlt }}</th></tr></thead>
+                <tbody>
+                {% for c in verification_checks %}
+                    <tr>
+                        <td>{{ c.label|text }} <span class="text-muted small">{{ c.code|text }}</span></td>
+                        <td>
+                            {% if c.enforced %}
+                                <span class="badge badge-success">{{ "enforced"|xlt }}</span>
+                            {% else %}
+                                <span class="badge badge-light border">{{ "not enforced"|xlt }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ c.passed }}</td>
+                        <td>
+                            {% if c.failed > 0 and not c.enforced %}
+                                <span class="text-muted">{{ c.failed }} <small>{{ "(advisory)"|xlt }}</small></span>
+                            {% elseif c.failed > 0 %}
+                                <span class="text-danger font-weight-bold">{{ c.failed }}</span>
+                            {% else %}
+                                {{ c.failed }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% if not verify_gate_enforced %}
+                <p class="text-muted small mb-0 mt-1">
+                    {{ "Content checks are advisory in this deployment: verdicts are recorded but do not block answers (set CLINICAL_COPILOT_VERIFY_ENFORCE=1 to enforce). A \"fail\" here is a would-fail, not a blocked turn. Patient identity stays enforced unconditionally."|xlt }}
+                </p>
+            {% endif %}
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Tool calls"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.tool_call_counts.total }}</div>
+            <small class="text-muted">{{ metrics.tool_failure_rate_pct }}% {{ "failure rate (aggregate across tools)"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "LLM retries"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.llm_retry_count }}</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Tokens / cost"|xlt }}</h6>
+            <div class="ccp-value">${{ metrics.tokens_and_cost.cost_usd_total }}</div>
+            <small class="text-muted">{{ metrics.tokens_and_cost.tokens_in }} {{ "in"|xlt }} / {{ metrics.tokens_and_cost.tokens_out }} {{ "out"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Worker lag"|xlt }}</h6>
+            <div class="ccp-value">{{ "n/a"|xlt }}</div>
+            <small class="text-muted">{{ metrics.worker_lag.note|text }}</small>
+        </div></div>
+    </div>
+
+    {# Week 2 (W2 rubric) metrics: ingestion volume, extraction field-level
+       pass rate, retrieval hit rate, worker routing -- all computed live from
+       mod_copilot_trace / mod_copilot_extracted_fact, same as every tile above. #}
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Document ingestions"|xlt }}</h6>
+            <div class="ccp-value"><a href="{{ dashboard_url|attr }}?kind=ingest">{{ metrics.ingestion_counts.total }}</a></div>
+            <small class="text-muted">{{ metrics.ingestion_counts.ingest }} {{ "ingest"|xlt }} &middot; {{ metrics.ingestion_counts.preview }} {{ "intake preview"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Extraction field pass rate"|xlt }}</h6>
+            {% if metrics.extraction_field_pass.proposed > 0 %}
+                <div class="ccp-value">{{ metrics.extraction_field_pass.rate_pct }}%</div>
+                <small class="text-muted">{{ metrics.extraction_field_pass.accepted }}/{{ metrics.extraction_field_pass.proposed }} {{ "fields accepted unchanged (locked extractions)"|xlt }}</small>
+            {% else %}
+                <div class="ccp-value">{{ "n/a"|xlt }}</div>
+                <small class="text-muted">{{ "no locked extractions in this window"|xlt }}</small>
+            {% endif %}
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Retrieval hit rate"|xlt }}</h6>
+            {% if metrics.retrieval_hit_rate.total > 0 %}
+                <div class="ccp-value">{{ metrics.retrieval_hit_rate.rate_pct }}%</div>
+                <small class="text-muted">{{ metrics.retrieval_hit_rate.with_hits }}/{{ metrics.retrieval_hit_rate.total }} {{ "retrievals returned evidence"|xlt }}</small>
+            {% else %}
+                <div class="ccp-value">{{ "n/a"|xlt }}</div>
+                <small class="text-muted">{{ "no retrievals in this window"|xlt }}</small>
+            {% endif %}
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Worker routing"|xlt }}</h6>
+            <div class="ccp-value">
+                {{ "intake"|xlt }}: {{ metrics.worker_routing.workers.intake_extractor }}
+                &middot; {{ "evidence"|xlt }}: {{ metrics.worker_routing.workers.evidence_retriever }}
+            </div>
+            <small class="text-muted">
+                {{ "supervisor ok/degraded/error"|xlt }}:
+                {{ metrics.worker_routing.supervisor_by_status.ok }}/{{ metrics.worker_routing.supervisor_by_status.degraded }}/{{ metrics.worker_routing.supervisor_by_status.error }}
+            </small>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Reviewer concurrence rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.reviewer_concurrence_rate_pct }}%</div>
+            <small class="text-muted">{{ "advisory Flash reviewer -- never a gate"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Salience score"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.salience_score_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Narrative density ratio"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.narrative_density_ratio_avg }}</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Fact utilization (uncited %)"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.fact_utilization_rate_avg }}</div>
+        </div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Chat drill-down rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.chat_drilldown_rate_pct }}%</div>
+            <small class="text-muted">{{ "turns needing a tool call beyond preload"|xlt }}</small>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Unaccounted entity rate (I14)"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.unaccounted_entity_rate_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Citation click-through rate"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.citation_click_through_rate_pct }}%</div>
+        </div></div>
+        <div class="col-md-3"><div class="ccp-tile">
+            <h6>{{ "Facts panel opens"|xlt }}</h6>
+            <div class="ccp-value">{{ metrics.facts_panel_opens }}</div>
+        </div></div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>{{ "Requests"|xlt }}</strong>
+            {% if kind_filter or status_filter %}
+                <a href="{{ dashboard_url|attr }}" class="small">{{ "clear filters"|xlt }}</a>
+            {% endif %}
+        </div>
+        <div class="card-body table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>{{ "Started"|xlt }}</th><th>{{ "Kind"|xlt }}</th><th>{{ "Status"|xlt }}</th><th>{{ "Pid"|xlt }}</th><th>{{ "Spans"|xlt }}</th><th>{{ "Correlation"|xlt }}</th></tr></thead>
+                <tbody>
+                {% for r in requests %}
+                    <tr>
+                        <td>{{ r.started_at|text }}</td>
+                        <td>{{ r.kind|text }}</td>
+                        <td>{{ r.status|text }}</td>
+                        <td>{{ r.pid ?? '-' }}</td>
+                        <td>{{ r.span_count }}</td>
+                        <td><a href="{{ dashboard_url|attr }}?correlation_id={{ r.correlation_id|url_encode }}">{{ r.correlation_id|text }}</a></td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="text-muted">{{ "No requests in this window."|xlt }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if correlation_id %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>{{ "Span waterfall"|xlt }}</strong> <small class="text-muted">{{ correlation_id|text }}</small></div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm ccp-waterfall">
+                    <thead><tr>
+                        <th>{{ "Started"|xlt }}</th><th>{{ "Kind"|xlt }}</th><th>{{ "Duration (ms)"|xlt }}</th>
+                        <th>{{ "Status"|xlt }}</th><th>{{ "Model"|xlt }}</th><th>{{ "Tokens"|xlt }}</th>
+                        <th>{{ "Error"|xlt }}</th><th>{{ "Payload"|xlt }}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for span in waterfall %}
+                        <tr class="{{ span.status == 'error' ? 'table-danger' : (span.status == 'degraded' ? 'table-warning' : '') }}">
+                            <td>{{ span.started_at|text }}</td>
+                            <td>{{ span.kind|text }}</td>
+                            <td>{{ span.duration_ms ?? '-' }}</td>
+                            <td>{{ span.status|text }}</td>
+                            <td>{{ span.model ?? '-' }}</td>
+                            <td>{{ span.tokens_in ?? '-' }}/{{ span.tokens_out ?? '-' }}</td>
+                            <td>{{ (span.error_detail ?? '')|text }}</td>
+                            <td>
+                                {% if span.payload_ref %}
+                                    <a href="{{ dashboard_url|attr }}?correlation_id={{ correlation_id|url_encode }}&payload_ref={{ span.payload_ref|url_encode }}">{{ "view"|xlt }}</a>
+                                {% else %}
+                                    <span class="text-muted">{{ "none captured"|xlt }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if payload_refs is not empty %}
+                    <p class="small text-muted mb-1">{{ "All payloads stored for this correlation id:"|xlt }}</p>
+                    <ul class="small">
+                        {% for p in payload_refs %}
+                            <li>
+                                <a href="{{ dashboard_url|attr }}?correlation_id={{ correlation_id|url_encode }}&payload_ref={{ p.payload_ref|url_encode }}">{{ p.kind|text }}</a>
+                                ({{ p.created_at|text }})
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                {% if payload %}
+                    <h6>{{ "Payload"|xlt }}: {{ payload.kind|text }}</h6>
+                    <div class="ccp-payload">{{ payload_json|text }}</div>
+                {% elseif payload_ref %}
+                    <div class="alert alert-warning small">{{ "No payload found for this reference."|xlt }}</div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+</body>
+</html>

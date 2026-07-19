@@ -1,0 +1,30 @@
+meta {
+  name: 6 - Lock Extraction
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/extraction_review.php?extraction_id={{extraction_id}}
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  action: lock
+  extraction_id: {{extraction_id}}
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  Verify & lock: commits the verified values to the chart (intake -> patient_data,
+  labs -> procedure_result) idempotently with lineage, computes extraction
+  accuracy, and freezes the record. Post-lock edits require an elevated admin
+  (action=unlock). Locking twice is a no-op (nothing new committed).
+}
+
+tests {
+  test("lock accepted (PRG redirect)", function () {
+    expect([200, 302]).to.include(res.getStatus());
+  });
+}

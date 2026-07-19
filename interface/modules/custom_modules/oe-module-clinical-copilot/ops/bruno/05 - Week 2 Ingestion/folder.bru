@@ -1,0 +1,15 @@
+meta {
+  name: 05 - Week 2 Ingestion
+  seq: 5
+}
+
+docs {
+  Week 2 document ingestion + write-back + evidence. Real files under
+  `public/`: intake_upload.php, lab_upload.php, extraction_review.php,
+  evidence.php. Run "00 - Auth Bootstrap" first for `csrf_token`.
+
+  Flow: upload (intake or lab) returns a 302 to extraction_review.php with an
+  `extraction_id`; set that in the environment, then run Review → Edit → Lock.
+  Uploads reference a fixture document — set `fixture_pdf` in the environment
+  to a local PDF/image path, or use the module's tests/Seed fixtures.
+}

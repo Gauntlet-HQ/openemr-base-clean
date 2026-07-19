@@ -1,0 +1,49 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://www.open-emr.org/clinical-copilot/medication_list.schema.json",
+    "title": "Medication list extraction",
+    "description": "Strict contract for medications transcribed from an uploaded medication list (discharge med list, pharmacy printout, patient-carried list). Each medication is emitted as a RUN of attribute entries in document order: a `medication_name` entry starts a new medication, and the dose/route/frequency/prn/prescriber entries that follow it belong to that medication until the next `medication_name`. field_key is a CLOSED enum (the intake convention) — an out-of-vocabulary key rejects the extraction. Per-field page/quote citations are OPTIONAL (the intake convention, never in the required array): welcome when the source text is clearly identifiable, and a missing citation never fails the extraction. Values are transcribed EXACTLY as printed — never normalized, converted, or inferred; a blank or illegible attribute is value null. The schema is the source of truth: raw VLM output that does not validate against this shape is rejected before anything is persisted.",
+    "type": "object",
+    "properties": {
+        "fields": {
+            "type": "array",
+            "description": "Attribute entries in document order. Start each medication with a medication_name entry; follow it with that medication's other attributes.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field_key": {
+                        "type": "string",
+                        "description": "Which medication attribute this entry is. medication_name starts a new medication.",
+                        "enum": [
+                            "medication_name",
+                            "dose",
+                            "route",
+                            "frequency",
+                            "prn",
+                            "prescriber"
+                        ]
+                    },
+                    "value": {
+                        "type": ["string", "null"],
+                        "description": "The attribute exactly as printed (e.g. \"Metformin\", \"500 mg\", \"oral\", \"twice daily\", \"PRN\" or \"as needed\", \"Dr. A. Chen\"), or null if blank/illegible. Never normalize, convert, or invent a value."
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "Model self-reported confidence in [0,1]. Advisory only."
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Optional: the 1-based page number the value was read from, when clearly identifiable. Omit when unsure — never guess."
+                    },
+                    "quote": {
+                        "type": "string",
+                        "description": "Optional: a short verbatim quote of the source text the value was read from. Omit when unsure — never invent."
+                    }
+                },
+                "required": ["field_key", "value"]
+            }
+        }
+    },
+    "required": ["fields"]
+}

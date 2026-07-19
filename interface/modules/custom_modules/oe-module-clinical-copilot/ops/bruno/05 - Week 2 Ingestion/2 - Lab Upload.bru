@@ -1,0 +1,31 @@
+meta {
+  name: 2 - Lab Upload
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/lab_upload.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  action: upload
+  pid: {{pid}}
+  csrf_token_form: {{csrf_token}}
+  document: @file({{fixture_pdf}})
+}
+
+docs {
+  Upload a lab PDF for an existing patient ({{pid}}). Extracts discrete results
+  and 302-redirects to extraction_review.php?extraction_id=<id>. Locking the
+  review commits the results to procedure_result (the Week 1 lab reader then
+  reads them back). Reachable from the patient chart's "Labs (Co-Pilot)" tab.
+}
+
+tests {
+  test("accepted", function () {
+    expect([200, 302]).to.include(res.getStatus());
+  });
+}

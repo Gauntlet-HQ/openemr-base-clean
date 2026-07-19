@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-emr.org/schemas/clinical-copilot/fact.schema.json",
+  "title": "Clinical Co-Pilot Fact",
+  "description": "The one canonical Fact shape (ARCHITECTURE_COMPLETE.md \"Fact object\"). Every capability output, tool result, digest input, LLM prompt fact, and verifier check (V2-V4) operates on this shape. This schema, not the PHP implementation, is the contract (ARCHITECTURE.md R3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "capability",
+    "capability_version",
+    "kind",
+    "pid",
+    "clinical_date",
+    "date_source",
+    "value",
+    "status",
+    "flags",
+    "citations"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "hash(capability, kind, citations, canonical value) -- value included so a preloaded fact and a later re-fetch of the same datum with a corrected value never collide (T19)."
+    },
+    "capability": {
+      "type": "string",
+      "enum": ["control_proxy", "med_response", "vitals_trend", "overdue_tests", "pending_results"]
+    },
+    "capability_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Digest input. A capability_version bump regenerates every doc whose fact set includes that capability's facts (E5)."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "result",
+        "trend_point",
+        "med_event",
+        "vital",
+        "overdue_item",
+        "pending_order",
+        "preliminary_result",
+        "exclusion",
+        "conflict",
+        "derived_delta",
+        "derived_count",
+        "derived_span",
+        "expected_result_date"
+      ]
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Asserted on tool return (I10) and re-verified per citation (V3)."
+    },
+    "clinical_date": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "format": "date",
+      "description": "ISO-8601 calendar date per C1 precedence; null only for kinds without a timeline."
+    },
+    "date_source": {
+      "type": "string",
+      "enum": ["collected", "fallback"],
+      "description": "C1: collected = authoritative specimen-collection date; fallback = substituted only because no collection date exists."
+    },
+    "value": {
+      "description": "Present on result/trend_point/vital kinds; null otherwise.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["raw", "parsed", "comparator", "unit_original", "unit_canonical", "conversion_version"],
+          "properties": {
+            "raw": {
+              "type": "string",
+              "maxLength": 255,
+              "description": "Verbatim from the chart, length-bounded (procedure_result.result is varchar(255))."
+            },
+            "parsed": {
+              "type": ["number", "null"],
+              "description": "null means no numeric claim is permitted (C3)."
+            },
+            "comparator": {
+              "type": "string",
+              "enum": ["none", "lt", "lte", "gt", "gte"],
+              "description": "Non-none means the value is censored: parsed is a bound its direction proves, never an exact reading."
+            },
+            "unit_original": {
+              "type": "string",
+              "description": "'' is allowed; then parsed math is banned (C4, no unit no math)."
+            },
+            "unit_canonical": {
+              "type": ["string", "null"]
+            },
+            "conversion_version": {
+              "type": ["string", "null"],
+              "description": "C4 whitelist version, a digest input; non-null only if a unit conversion was actually applied."
+            }
+          }
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["final", "corrected", "unstated", "preliminary", "excluded"]
+    },
+    "flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "anyOf": [
+          { "enum": ["conflict", "censored", "out_of_range_by_value", "out_of_range_by_lab_flag"] },
+          { "pattern": "^superseded_[0-9]+$" },
+          { "pattern": "^excluded_reason:(unitless|unresulted_status|unrecognized_status|unparseable_value)$" }
+        ]
+      }
+    },
+    "citations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["table", "pk", "field", "date_source"],
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "examples": ["procedure_result", "procedure_order", "procedure_report", "prescriptions", "lists", "form_vitals"]
+          },
+          "pk": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "field": {
+            "type": ["string", "null"]
+          },
+          "date_source": {
+            "type": "string",
+            "enum": ["collected", "fallback"]
+          }
+        }
+      }
+    }
+  }
+}

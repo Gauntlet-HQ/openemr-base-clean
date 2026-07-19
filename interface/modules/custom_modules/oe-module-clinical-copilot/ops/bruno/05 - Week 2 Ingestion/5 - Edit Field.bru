@@ -1,0 +1,32 @@
+meta {
+  name: 5 - Edit Field
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/extraction_review.php?extraction_id={{extraction_id}}
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  action: edit
+  extraction_id: {{extraction_id}}
+  field_id: {{field_id}}
+  value: 7.4
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  Correct one extracted field (set `field_id` from the review page). The edit
+  is recorded as human ground truth: if the value diverges from the model's,
+  the field is flagged edited and counts against extraction accuracy. Refused
+  once the extraction is locked unless the caller is an elevated admin.
+}
+
+tests {
+  test("edit accepted (PRG redirect)", function () {
+    expect([200, 302]).to.include(res.getStatus());
+  });
+}

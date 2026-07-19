@@ -1,0 +1,29 @@
+meta {
+  name: 7 - Guideline Evidence
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/evidence.php?pid={{pid}}&topics=a1c,lipids
+  auth: none
+}
+
+query {
+  pid: {{pid}}
+  topics: a1c,lipids
+}
+
+docs {
+  Cited guideline evidence (hybrid RAG over the committed corpus) grouped by
+  topic, shown separately from patient-record facts. `topics` is a closed
+  vocabulary (a1c, lipids, kidney, blood_pressure, medications, hypoglycemia);
+  omit it for all topics. Read-only, no CSRF.
+}
+
+tests {
+  test("returns cited evidence", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody()).to.include("Guideline Evidence");
+  });
+}

@@ -1,0 +1,83 @@
+# Clinical Co-Pilot -- local pgvector "vector DB" overlay.
+#
+# Stands up the SEPARATE medical-knowledge Postgres (pgvector) the RAG store uses,
+# so the whole knowledge flow -- upload -> chunk -> embed -> store -> retrieve --
+# runs locally with no Railway instance. It is a DISTINCT database from OpenEMR's
+# MySQL by design (PHI never lands here), exactly as it will be in production; the
+# only difference is this one lives in a container next to the app instead of at
+# Railway.
+#
+# Layered ON TOP of the maintained dev stack via `-f`, so it stays inside the
+# module directory (additivity). It:
+#   - adds a `knowledge_db` pgvector service (schema auto-applied on first init),
+#   - rebuilds the `openemr` service from ops/local/knowledge/Dockerfile so the
+#     app container has the pdo_pgsql driver OpenEMR's stock image omits, and
+#   - points the module's CLINICAL_COPILOT_KNOWLEDGE_DB_* env at that service.
+#
+# Recommended: use ops/local/knowledge-up.sh (sets the absolute paths below and
+# waits for health). Manual, from the repo root (stack the gemini overlay too so
+# embeddings work):
+#   docker compose \
+#     -f docker/development-easy/docker-compose.yml \
+#     -f interface/modules/custom_modules/oe-module-clinical-copilot/ops/local/compose.gemini.yml \
+#     -f interface/modules/custom_modules/oe-module-clinical-copilot/ops/local/compose.knowledge.yml \
+#     up -d --build
+#
+# The CLINICAL_COPILOT_KB_* vars below let the wrapper pass ABSOLUTE host paths so
+# Compose's relative-path resolution (build.context vs bind mounts differ) can
+# never bite; the defaults are correct for the standard invocation whose first
+# `-f` is docker/development-easy/.
+#
+# >>> Local-dev credentials only. NEVER reuse them for a deployed instance. <<<
+services:
+  knowledge_db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+      POSTGRES_DB: knowledge
+    volumes:
+      # Persist across restarts.
+      - knowledgedbvolume:/var/lib/postgresql/data
+      # schema.sql runs ONCE on first init of an empty data dir: CREATE EXTENSION
+      # vector, guideline_chunks, the HNSW + GIN indexes. knowledge-up.sh also
+      # re-applies it idempotently after boot, covering a volume that predates
+      # this file.
+      - ${CLINICAL_COPILOT_KB_SCHEMA:-../../interface/modules/custom_modules/oe-module-clinical-copilot/ops/knowledge/schema.sql}:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    ports:
+      # Host access for psql / inspection; inside the stack the host name is
+      # `knowledge_db`. 55432 avoids colliding with a host Postgres on 5432.
+      - "${CLINICAL_COPILOT_KB_HOST_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d knowledge"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  openemr:
+    # OpenEMR's stock image is MySQL-only; this local build adds the pdo_pgsql
+    # driver (see ops/local/knowledge/Dockerfile). Overriding `image` to a local
+    # tag stops Compose trying to re-tag the digest-pinned base (which would fail).
+    image: oe-clinical-copilot/openemr-flex-pgsql:local
+    build:
+      context: ${CLINICAL_COPILOT_KB_BUILD_CTX:-./knowledge}
+      dockerfile: Dockerfile
+    depends_on:
+      knowledge_db:
+        condition: service_healthy
+    environment:
+      # Point the module at the local vector DB over the docker bridge. sslmode is
+      # disabled: this is an in-cluster plaintext link, not a public hop (Railway
+      # will set sslmode=require via its URL). KnowledgeBaseConfig accepts either
+      # this discrete-parts form or CLINICAL_COPILOT_KNOWLEDGE_DATABASE_URL.
+      CLINICAL_COPILOT_KNOWLEDGE_DB_HOST: knowledge_db
+      CLINICAL_COPILOT_KNOWLEDGE_DB_PORT: "5432"
+      CLINICAL_COPILOT_KNOWLEDGE_DB_NAME: knowledge
+      CLINICAL_COPILOT_KNOWLEDGE_DB_USER: copilot
+      CLINICAL_COPILOT_KNOWLEDGE_DB_PASSWORD: copilot
+      CLINICAL_COPILOT_KNOWLEDGE_DB_SSLMODE: disable
+      CLINICAL_COPILOT_KNOWLEDGE_TABLE: guideline_chunks
+
+volumes:
+  knowledgedbvolume: {}

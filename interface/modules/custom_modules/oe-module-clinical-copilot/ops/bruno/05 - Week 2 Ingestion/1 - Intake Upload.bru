@@ -1,0 +1,31 @@
+meta {
+  name: 1 - Intake Upload
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/intake_upload.php
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  action: upload
+  csrf_token_form: {{csrf_token}}
+  document: @file({{fixture_pdf}})
+}
+
+docs {
+  Upload an intake PDF. The co-pilot extracts demographics/chief-concern/
+  meds/allergies/family-history, CREATES the patient, and 302-redirects to
+  extraction_review.php?extraction_id=<id>. Copy that id into the environment's
+  `extraction_id` for the Review/Edit/Lock requests. With no model configured
+  the extraction is a blank draft to complete by hand.
+}
+
+tests {
+  test("redirects to the review page", function () {
+    expect([200, 302]).to.include(res.getStatus());
+  });
+}

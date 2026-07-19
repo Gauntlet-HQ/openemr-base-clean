@@ -1,0 +1,451 @@
+openapi: 3.0.3
+info:
+  title: Clinical Co-Pilot — Week 2 Ingestion API
+  version: "1.0.0"
+  description: >
+    Week 2 document-ingestion, verification/lock, and guideline-evidence
+    endpoints of the OpenEMR Clinical Co-Pilot module. All endpoints are module
+    pages under `public/`, session-authenticated (the same login cookie the rest
+    of OpenEMR uses — there is no separate REST auth model), and gated by both
+    the `patients/med` and `clinical_copilot/copilot_access` ACLs. State-changing
+    POSTs require the `csrf_token_form` field (obtain it from an authenticated
+    session). This spec is kept in sync with the implementation; the Bruno
+    collections under `ops/bruno/05 - Week 2 Ingestion` and
+    `ops/bruno/06 - Week 2 Agent` exercise every operation.
+servers:
+  - url: https://localhost:9300
+    description: Local dev stack
+tags:
+  - name: ingestion
+  - name: review
+  - name: evidence
+  - name: agent
+  - name: knowledge
+  - name: ops
+paths:
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/agent.php:
+    get:
+      tags: [agent]
+      summary: Method guard -- the agent endpoint is POST-only
+      responses:
+        "405": { description: "POST only.", content: { application/json: { schema: { type: object } } } }
+    post:
+      tags: [agent]
+      summary: Run the Week 2 multi-agent graph (supervisor -> workers -> critic) for one patient question
+      description: >
+        One request = one full supervisor run: the deterministic supervisor
+        routes to the evidence-retriever worker (always, for a question) and
+        the intake-extractor worker (when a document is attached), the
+        LLM-backed composer drafts a §2.1 claims answer over chart facts its
+        tools fetched, and the critic (deterministic V1-V6 verifier) hard-gates
+        the draft -- a rejected draft degrades to `answer_status: refused` and
+        its text never surfaces. The whole handoff graph is recorded as one
+        correlation-id-linked span tree (`supervisor` root -> `worker` children
+        -> `verify`); paste the returned `correlation_id` into
+        `dashboard.php?correlation_id=...` for the waterfall. `answer_status`
+        null with `degraded_reason` set means the composer LLM was unavailable
+        (facts/evidence-only degrade); guideline `evidence` and any document
+        `extraction` are returned in their own deterministically-cited
+        sections, never merged into the claims.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pid, question, csrf_token_form]
+              properties:
+                pid: { type: integer }
+                question:
+                  type: string
+                  description: The clinical question to ground and answer (max 4000 chars).
+                tags:
+                  type: string
+                  description: >
+                    Optional comma-separated evidence topics (closed vocabulary,
+                    same as evidence.php: a1c, lipids, kidney, blood_pressure,
+                    medications, hypoglycemia). Unknown keys are dropped.
+                csrf_token_form: { type: string }
+                doc_type:
+                  type: string
+                  enum: [intake_form, lab_pdf, medication_list]
+                  description: Required when `document` is uploaded; ignored otherwise.
+                document:
+                  type: string
+                  format: binary
+                  description: >
+                    Optional source document (application/pdf, image/png,
+                    image/jpeg, image/webp) routed to the intake-extractor
+                    worker; extracted fields are returned for answering only,
+                    never committed to the chart (the human-gated lock flow
+                    owns write-back).
+      responses:
+        "200":
+          description: >
+            The supervisor result: `routed` worker list, `correlation_id`,
+            critic-gated `claims`+`verdicts` (or `refusal_message`), cited
+            guideline `evidence`, and any document `extraction`.
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { description: "Invalid input (missing/invalid pid, empty or oversized question, document without a valid doc_type).", content: { application/json: { schema: { type: object } } } }
+        "403": { description: "CSRF or ACL denied.", content: { application/json: { schema: { type: object } } } }
+        "404": { description: "Patient not found.", content: { application/json: { schema: { type: object } } } }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/intake_upload.php:
+    get:
+      tags: [ingestion]
+      summary: Intake upload form
+      responses:
+        "200": { description: "The intake upload form (HTML)." }
+        "403": { description: "ACL denied." }
+    post:
+      tags: [ingestion]
+      summary: Upload an intake PDF for extraction preview, or save the reviewed fields as a new patient
+      description: >
+        Deferred-save flow: action=upload extracts and renders the two-pane
+        review screen without persisting anything; action=save (submitted from
+        that review screen) creates the patient, stores the document, and
+        redirects to the new chart.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [action, csrf_token_form]
+              properties:
+                action: { type: string, enum: [upload, save] }
+                csrf_token_form: { type: string }
+                document:
+                  type: string
+                  format: binary
+                  description: >
+                    Required when action=upload. PDF or image (application/pdf,
+                    image/png, image/jpeg, image/webp).
+                field:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: "action=save: reviewed values keyed by intake field_key."
+                pdf_b64:
+                  type: string
+                  description: "action=save: the uploaded document, carried through the review screen as base64."
+                pdf_mime:
+                  type: string
+                  description: "action=save: document MIME; re-validated server-side against the upload allowlist."
+                pdf_name:
+                  type: string
+                  description: "action=save: original filename for the stored document."
+      responses:
+        "200": { description: "action=upload: the two-pane review screen (nothing persisted). Also the form/review re-rendered with a validation error." }
+        "302": { description: "action=save success: redirect to the new patient's chart (demographics.php?set_pid=<pid>)." }
+        "403": { description: "CSRF or ACL denied." }
+        "413": { description: "Upload exceeded the server's post body limit." }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/lab_upload.php:
+    get:
+      tags: [ingestion]
+      summary: Labs tab (upload or manual entry) for a patient
+      parameters:
+        - { name: pid, in: query, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "The labs upload/manual page." }
+        "400": { description: "Missing pid." }
+        "403": { description: "ACL denied." }
+    post:
+      tags: [ingestion]
+      summary: Upload a lab PDF, or start a manual lab draft
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [action, pid, csrf_token_form]
+              properties:
+                action: { type: string, enum: [upload, manual] }
+                pid: { type: integer }
+                csrf_token_form: { type: string }
+                document: { type: string, format: binary, description: Required when action=upload. }
+      responses:
+        "302": { description: "Redirect to extraction_review.php?extraction_id=<id>." }
+        "200": { description: "The form re-rendered with a validation error." }
+        "403": { description: "CSRF or ACL denied." }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/medication_upload.php:
+    get:
+      tags: [ingestion]
+      summary: Medication list upload form for a patient (third patient-attached document type)
+      parameters:
+        - { name: pid, in: query, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: "The medication list upload page." }
+        "400": { description: "Missing pid." }
+        "403": { description: "ACL denied." }
+    post:
+      tags: [ingestion]
+      summary: Upload a medication list for extraction and human review
+      description: >
+        Extracts each medication (name, dose, route, frequency, PRN flag,
+        prescriber — transcribed exactly as printed, never normalized) into a
+        draft in module staging and 302-redirects to
+        extraction_review.php?extraction_id=<id>. Locking the review freezes
+        the verified transcription and records extraction accuracy but writes
+        NOTHING to the chart's medication/prescription tables — medication
+        chart reconciliation is a deliberately deferred clinical step. With no
+        model configured the upload degrades to a blank draft skeleton.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [action, pid, csrf_token_form]
+              properties:
+                action: { type: string, enum: [upload] }
+                pid: { type: integer }
+                csrf_token_form: { type: string }
+                document:
+                  type: string
+                  format: binary
+                  description: >
+                    The medication list (application/pdf, image/png,
+                    image/jpeg, image/webp).
+      responses:
+        "302": { description: "Redirect to extraction_review.php?extraction_id=<id>." }
+        "200": { description: "The form re-rendered with a validation error." }
+        "400": { description: "Missing pid." }
+        "403": { description: "CSRF or ACL denied." }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/extraction_review.php:
+    get:
+      tags: [review]
+      summary: The verify/edit/lock review surface for a draft extraction
+      parameters:
+        - { name: extraction_id, in: query, required: true, schema: { type: integer } }
+        - { name: err, in: query, required: false, schema: { type: integer }, description: "Set by the Post/Redirect/Get redirect when the previous action failed." }
+      responses:
+        "200": { description: "The review page (fields + citations + source map)." }
+        "400": { description: "Missing extraction_id." }
+        "403": { description: "ACL denied." }
+    post:
+      tags: [review]
+      summary: Edit a field, add a manual lab row, lock, or unlock
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [action, extraction_id, csrf_token_form]
+              properties:
+                action: { type: string, enum: [edit, add_field, lock, unlock] }
+                extraction_id: { type: integer }
+                csrf_token_form: { type: string }
+                field_id: { type: integer, description: Required for action=edit. }
+                value: { type: string, nullable: true }
+                field_key: { type: string, description: Required for action=add_field (manual lab). }
+                unit: { type: string, nullable: true }
+                ref_range: { type: string, nullable: true }
+                abnormal_flag: { type: string, nullable: true }
+                collection_date:
+                  type: string
+                  format: date
+                  description: "Used by action=lock (labs): specimen draw/collection date, strict YYYY-MM-DD; anything else falls back to today."
+      responses:
+        "302": { description: "Post/Redirect/Get back to the review page." }
+        "400": { description: "Missing extraction_id." }
+        "403": { description: "CSRF or ACL denied (unlock/post-lock edit needs an elevated admin)." }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/evidence.php:
+    get:
+      tags: [evidence]
+      summary: Cited guideline evidence grouped by topic (hybrid RAG)
+      parameters:
+        - { name: pid, in: query, required: false, schema: { type: integer } }
+        - name: topics
+          in: query
+          required: false
+          description: >
+            Comma-separated closed vocabulary. Omit for all topics.
+          schema:
+            type: string
+            example: a1c,lipids
+      responses:
+        "200": { description: "Topic-grouped, cited guideline evidence (HTML)." }
+        "403": { description: "ACL denied." }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/knowledge_upload.php:
+    get:
+      tags: [knowledge]
+      summary: Knowledge-base (RAG corpus) upload form
+      description: >
+        Maintenance surface for curating the guideline knowledge base.
+        Admin-only: requires the host admin section (admin/super or
+        admin/users) AND the module's clinical_copilot/copilot_access ACL —
+        stricter than the patients/med gate the ingestion endpoints use. The
+        only write is to the SEPARATE knowledge Postgres, never an
+        OpenEMR/PHI table.
+      responses:
+        "200": { description: "The knowledge upload form (HTML)." }
+        "403": { description: "ACL denied (not an admin, or module ACL missing)." }
+        "500": { description: "Rendering failed after an internal error (generic message, no detail)." }
+    post:
+      tags: [knowledge]
+      summary: Preview a document's chunking, or commit the reviewed chunks to the knowledge base
+      description: >
+        Two-step deferred-commit flow: action=preview extracts text from the
+        uploaded file (or the pasted text), chunks it with the requested
+        size/overlap (clamped to a safe band), and renders a review screen
+        without persisting anything; action=commit (submitted from that
+        review screen, chunks carried through as JSON) writes the chunks to
+        the knowledge store and audit-logs the ingestion. Documents over
+        12 MB are rejected as unsupported.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [action, csrf_token_form]
+              properties:
+                action: { type: string, enum: [preview, commit] }
+                csrf_token_form: { type: string }
+                source:
+                  type: string
+                  description: "action=preview (required): source label — the citation and the re-upload key."
+                title: { type: string, description: "action=preview: optional document title." }
+                section: { type: string, description: "action=preview: optional section label applied to chunks." }
+                url:
+                  type: string
+                  description: "action=preview: optional source URL stored with the document metadata."
+                tags:
+                  type: string
+                  description: "action=preview: comma-separated base tags applied to every chunk."
+                chunk_size:
+                  type: integer
+                  description: "action=preview: target chunk size in characters; blank/invalid falls back to the default, out-of-band values are clamped."
+                overlap:
+                  type: integer
+                  description: "action=preview: chunk overlap in characters (clamped with chunk_size)."
+                document:
+                  type: string
+                  format: binary
+                  description: >
+                    action=preview: the document to ingest (text, markdown,
+                    HTML, PDF, or image; max 12 MB). Omit to use pasted_text
+                    instead.
+                pasted_text:
+                  type: string
+                  description: "action=preview: pasted text to ingest when no file is uploaded."
+                chunks_json:
+                  type: string
+                  description: "action=commit: the reviewed chunks, carried through the review screen as JSON."
+                replace_existing:
+                  type: string
+                  enum: ["0", "1"]
+                  description: "action=commit: replace previously ingested chunks with the same source label (default 1)."
+      responses:
+        "200": { description: "action=preview: the chunk review screen (nothing persisted). action=commit: the ingestion result. Also the form re-rendered with a validation error." }
+        "403": { description: "CSRF or ACL denied." }
+        "413": { description: "Upload exceeded the server's post body limit." }
+        "500": { description: "Rendering failed after an internal error (generic message, no detail)." }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/health.php:
+    get:
+      tags: [ops]
+      summary: Unauthenticated liveness probe (checks no dependencies)
+      description: >
+        Deliberately UNAUTHENTICATED and dependency-free (ARCHITECTURE.md
+        §3.4): a DB outage must not fail liveness and get the app pointlessly
+        restarted by an orchestrator. Returns only module identity + version;
+        always 200 while the PHP process can serve at all.
+      responses:
+        "200":
+          description: "Liveness: module enabled + version. No dependency state."
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, module, version]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  module: { type: string, example: oe-module-clinical-copilot }
+                  version: { type: string }
+  /interface/modules/custom_modules/oe-module-clinical-copilot/public/ready.php:
+    get:
+      tags: [ops]
+      summary: Unauthenticated, redacted, rate-limited readiness probe
+      description: >
+        Genuine dependency checks (ARCHITECTURE.md §3.4) — DB round-trip,
+        module tables writable, LLM reachability, worker heartbeat, circuit
+        breaker, plus the Week-2 dependencies document_store / knowledge /
+        reranker. Unauthenticated but REDACTED: every field is a status enum
+        only (no latencies, no config values, no PHI), and requests are
+        per-IP rate-limited. Degraded-but-serving states (LLM down, stale
+        heartbeat) report status=degraded with HTTP 200; only hard-dependency
+        failure (DB / tables) is status=error with HTTP 503.
+      responses:
+        "200":
+          description: "Ready (status=ok) or degraded-but-serving (status=degraded)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyStatus"
+        "429":
+          description: "Per-IP rate limit exceeded."
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [rate_limited] }
+        "503":
+          description: "Hard dependencies (DB / module tables) failed: status=error, ready=false."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyStatus"
+components:
+  schemas:
+    ReadyStatus:
+      type: object
+      description: >
+        The redacted readiness snapshot (status enums only — ReadyCheck's own
+        contract). `ready` is true whenever the hard dependencies (DB +
+        writable tables) are sound, independent of the LLM.
+      required: [ready, status, db, tables_writable, llm, worker_heartbeat, breaker, document_store, knowledge, reranker]
+      properties:
+        ready: { type: boolean }
+        status: { type: string, enum: [ok, degraded, error] }
+        db: { type: string }
+        tables_writable: { type: string }
+        llm: { type: string }
+        worker_heartbeat: { type: string }
+        breaker: { type: string, enum: [open, closed, unknown] }
+        document_store: { type: string }
+        knowledge: { type: string }
+        reranker: { type: string, enum: [in-process] }
+    SourceCitation:
+      type: object
+      description: The Week 2 machine-readable citation contract (per extracted fact / evidence snippet).
+      required: [source_type, source_id, quote_or_value]
+      properties:
+        source_type: { type: string, enum: [document, guideline] }
+        source_id: { type: string }
+        page_or_section: { type: integer, nullable: true }
+        field_or_chunk_id: { type: string, nullable: true }
+        quote_or_value: { type: string }
+        bbox:
+          type: array
+          nullable: true
+          items: { type: integer }
+          minItems: 4
+          maxItems: 4
+          description: Normalized 0–1000 [x0,y0,x1,y1].
+    ExtractedField:
+      type: object
+      description: One field of a draft extraction (staging).
+      properties:
+        field_key: { type: string }
+        vlm_value: { type: string, nullable: true, description: The model's original extraction. }
+        value: { type: string, nullable: true, description: The human-verified value. }
+        unit: { type: string, nullable: true }
+        ref_range: { type: string, nullable: true }
+        abnormal_flag: { type: string, nullable: true }
+        edited_by_user: { type: boolean }
+        citation: { $ref: "#/components/schemas/SourceCitation" }

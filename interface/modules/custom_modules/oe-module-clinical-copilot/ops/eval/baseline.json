@@ -1,0 +1,10 @@
+{
+    "rubrics": {
+        "citation_present": 1,
+        "factually_consistent": 1,
+        "no_phi_in_logs": 1,
+        "safe_refusal": 1,
+        "schema_valid": 1
+    },
+    "case_count": 54
+}

@@ -1,0 +1,29 @@
+meta {
+  name: 2 - View Trace Waterfall
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/dashboard.php?correlation_id={{correlation_id}}
+  auth: none
+}
+
+query {
+  correlation_id: {{correlation_id}}
+}
+
+docs {
+  The dashboard's span drill-down (HTML, admin ACL -- ARCHITECTURE.md §3.2)
+  for the correlation id captured by "1 - Ask the Agent": the waterfall shows
+  the `supervisor` root span with each routed `worker` child (evidence
+  retrieval, and intake extraction when a document was attached) and the
+  critic's `verify` span -- the logged handoff graph, reconstructed from the
+  correlation id alone.
+}
+
+tests {
+  test("dashboard renders the drill-down", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

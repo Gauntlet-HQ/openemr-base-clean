@@ -1,0 +1,73 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://www.open-emr.org/clinical-copilot/lab_pdf.schema.json",
+    "title": "Lab report extraction",
+    "description": "Strict contract for discrete results extracted from a scanned lab report. Every result is one field; field_key is the test name. The schema is the source of truth: raw VLM output that does not validate against this shape is rejected before anything is persisted.",
+    "type": "object",
+    "properties": {
+        "patient_name": {
+            "type": ["string", "null"],
+            "description": "The full patient name printed on the report header exactly as shown (e.g. \"Doe, Jane A.\"), or null if not printed. Used only to confirm the report belongs to the chart it is uploaded onto — never invent it."
+        },
+        "patient_dob": {
+            "type": ["string", "null"],
+            "description": "The patient date of birth printed on the report in YYYY-MM-DD, or null if not printed. Used only to confirm patient identity — never invent it."
+        },
+        "collection_date": {
+            "type": ["string", "null"],
+            "description": "The specimen collection date for this report in YYYY-MM-DD, or null if not printed."
+        },
+        "fields": {
+            "type": "array",
+            "description": "One entry per discrete lab result on the report.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field_key": {
+                        "type": "string",
+                        "description": "The test name exactly as printed (e.g. \"Hemoglobin A1c\", \"eGFR\")."
+                    },
+                    "value": {
+                        "type": ["string", "null"],
+                        "description": "The result value as printed, or null if illegible. Never invent a value."
+                    },
+                    "unit": {
+                        "type": ["string", "null"],
+                        "description": "The result unit as printed (e.g. \"%\", \"mg/dL\")."
+                    },
+                    "reference_range": {
+                        "type": ["string", "null"],
+                        "description": "The reference range as printed (e.g. \"4.0-5.6\")."
+                    },
+                    "abnormal_flag": {
+                        "type": ["string", "null"],
+                        "description": "The abnormal flag as printed.",
+                        "enum": ["H", "L", "HH", "LL", "N", "A", null]
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "Model self-reported confidence in [0,1]. Advisory only."
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "1-based page number the value was read from."
+                    },
+                    "quote": {
+                        "type": "string",
+                        "description": "The exact text span on the page the result row was read from (the citation quote)."
+                    },
+                    "bbox": {
+                        "type": "array",
+                        "description": "Bounding box [x0,y0,x1,y1] normalized to 0-1000 on each axis.",
+                        "items": { "type": "integer" },
+                        "minItems": 4,
+                        "maxItems": 4
+                    }
+                },
+                "required": ["field_key", "value", "unit", "reference_range", "page", "quote"]
+            }
+        }
+    },
+    "required": ["fields"]
+}

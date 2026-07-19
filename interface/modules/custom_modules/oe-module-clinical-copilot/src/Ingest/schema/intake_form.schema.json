@@ -1,0 +1,79 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://www.open-emr.org/clinical-copilot/intake_form.schema.json",
+    "title": "Intake form extraction",
+    "description": "Strict contract for facts extracted from a patient intake form. Unlike the lab contract, intake has NO click-to-source bbox overlay, so per-field page/quote citations are OPTIONAL: the model may include them when the source text is clearly identifiable, and a missing citation never fails the extraction. (They were once required, which over-constrained the model — forced to cite every blank demographic field, it produced output that failed the request and degraded intake to a blank manual form. Never move page/quote into the required array.) The schema is the source of truth: raw VLM output that does not validate against this shape is rejected before anything is persisted.",
+    "type": "object",
+    "properties": {
+        "fields": {
+            "type": "array",
+            "description": "One entry per extracted intake field. Only field_key values from the enum are accepted.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field_key": {
+                        "type": "string",
+                        "description": "Which intake fact this is.",
+                        "enum": [
+                            "title",
+                            "first_name",
+                            "middle_name",
+                            "last_name",
+                            "name_suffix",
+                            "date_of_birth",
+                            "sex",
+                            "ssn",
+                            "phone",
+                            "phone_mobile",
+                            "phone_work",
+                            "email",
+                            "address_street",
+                            "address_line2",
+                            "address_city",
+                            "address_state",
+                            "address_postal",
+                            "country",
+                            "county",
+                            "marital_status",
+                            "race",
+                            "ethnicity",
+                            "language",
+                            "mothers_name",
+                            "emergency_contact",
+                            "emergency_phone",
+                            "occupation",
+                            "employer_name",
+                            "employer_street",
+                            "employer_city",
+                            "employer_state",
+                            "employer_postal",
+                            "chief_concern",
+                            "current_medications",
+                            "allergies",
+                            "family_history"
+                        ]
+                    },
+                    "value": {
+                        "type": ["string", "null"],
+                        "description": "The extracted value, or null if the field is blank/illegible on the form. Never invent a value."
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "Model self-reported confidence in [0,1]. Advisory only."
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Optional: the 1-based page number the value was read from, when clearly identifiable. Omit when unsure — never guess."
+                    },
+                    "quote": {
+                        "type": "string",
+                        "description": "Optional: a short verbatim quote of the source text the value was read from. Omit when unsure — never invent."
+                    }
+                },
+                "required": ["field_key", "value"]
+            }
+        }
+    },
+    "required": ["fields"]
+}

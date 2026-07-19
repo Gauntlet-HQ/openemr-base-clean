@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Runs this module's DB-backed contract evals (tests/Db/) against a live
+OpenEMR database, e.g. `openemr-cmd worktree exec <branch> e 'cd interface/modules/custom_modules/oe-module-clinical-copilot && vendor/bin/phpunit'`
+inside the dev container, where the host project's vendor/ (PHPUnit) and a
+configured database are both available. Isolated tests (tests/Isolated/) need
+none of this and run via the host project's `composer phpunit-isolated`
+instead; see build-notes.md's Testing section.
+-->
+<phpunit bootstrap="tests/bootstrap.php" colors="true">
+  <testsuites>
+    <testsuite name="db">
+      <directory>tests/Db</directory>
+    </testsuite>
+  </testsuites>
+</phpunit>

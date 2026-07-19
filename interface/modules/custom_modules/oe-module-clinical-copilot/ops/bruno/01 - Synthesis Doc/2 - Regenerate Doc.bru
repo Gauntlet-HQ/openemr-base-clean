@@ -1,0 +1,37 @@
+meta {
+  name: 2 - Regenerate Doc
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/doc.php?pid={{pid}}
+  body: formUrlEncoded
+  auth: none
+}
+
+query {
+  pid: {{pid}}
+}
+
+body:form-urlencoded {
+  action: regenerate
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  The manual "Regenerate" button (T22, always available, free by
+  construction -- generation is idempotent and content-addressed, I1/I2).
+  Forces a fresh reduce+verify attempt over the CURRENT facts for
+  `{{pid}}`; does not re-extract. Requires `csrf_token` from
+  "00 - Auth Bootstrap" -- run that folder first, or this 403s.
+}
+
+tests {
+  test("regenerate accepted", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("re-renders the synthesis page, not a CSRF rejection", function () {
+    expect(res.getBody()).to.include("Pre-Visit Synthesis");
+  });
+}

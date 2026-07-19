@@ -1,0 +1,28 @@
+meta {
+  name: 3 - Start Manual Lab
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/interface/modules/custom_modules/oe-module-clinical-copilot/public/lab_upload.php
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  action: manual
+  pid: {{pid}}
+  csrf_token_form: {{csrf_token}}
+}
+
+docs {
+  Start an empty lab draft for manual entry (no PDF). 302-redirects to
+  extraction_review.php where result rows are added by hand, then locked.
+}
+
+tests {
+  test("accepted", function () {
+    expect([200, 302]).to.include(res.getStatus());
+  });
+}

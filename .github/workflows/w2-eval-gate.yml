@@ -1,0 +1,98 @@
+##
+# Clinical Co-Pilot Week 2 eval gate (W1a/W1c) -- the PR-blocking CI for
+# interface/modules/custom_modules/oe-module-clinical-copilot/.
+#
+# Three blocking gates:
+# 1. Eval gate: the 50-case golden set through the module's deterministic
+#    code paths (no DB, no network, no live model) -- fails on any rubric
+#    regression >5% from baseline or below its absolute floor.
+# 2. Additivity gate: the branch diff must stay confined to the module
+#    directory plus the whitelisted root spec docs / deploy layer.
+# 3. Module isolated PHPUnit tests: supervisor-worker contract, schema
+#    validation, and extraction-regression suites under tests/Isolated/,
+#    incl. the W1d OpenAPI contract tests (tests/Isolated/Api/) binding
+#    ops/api/openapi.yaml to the public/ endpoint implementations.
+#
+# Deliberately NOT run here: the module's DB-backed contract suite
+# (tests/Db/, incl. tests/Db/Worker/WorkerTest.php). It needs a live
+# OpenEMR install (module tests/bootstrap.php pulls in globals.php), so it
+# runs in the dev container instead -- `vendor/bin/phpunit` from the module
+# root, driven by the module's own phpunit.xml. Its CI guard is the
+# isolated contract equivalents above (e.g. tests/Isolated/Agent/
+# SupervisorTest.php covers the supervisor-worker contract without a DB).
+
+name: W2 Eval Gate
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MODULE_DIR: interface/modules/custom_modules/oe-module-clinical-copilot
+
+jobs:
+  w2-eval-gate:
+    runs-on: ubuntu-24.04
+
+    name: w2-eval-gate (golden-set evals + additivity)
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        # The additivity gate diffs against the merge-base with the base
+        # branch, so it needs full history and all remote refs.
+        fetch-depth: 0
+
+    - name: Setup PHP
+      uses: ./.github/actions/setup-php-composer
+      with:
+        php-version: '8.2'
+        # The eval runner is dependency-free (own SPL autoloader, no
+        # vendor/), so skip the composer install for a faster gate.
+        skip-composer-install: 'true'
+
+    - name: Week 2 eval gate (blocking)
+      run: bash "$MODULE_DIR/ops/ci/run-eval-gate.sh"
+
+    - name: Additivity gate (blocking)
+      env:
+        # On pull_request the script would auto-use origin/$GITHUB_BASE_REF;
+        # set the ref explicitly anyway so push events (where the script's
+        # fallback is origin/master, which does not exist in this repo --
+        # main is the default branch) diff against origin/main.
+        ADDITIVITY_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+      run: bash "$MODULE_DIR/ops/ci/check-additivity.sh"
+
+  w2-module-tests:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        php-version:
+        - '8.2'
+        - '8.3'
+        - '8.4'
+        - '8.5'
+        - '8.6'
+
+    name: w2-module-tests PHP ${{ matrix.php-version }}
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup PHP and Composer
+      uses: ./.github/actions/setup-php-composer
+      with:
+        php-version: ${{ matrix.php-version }}
+
+    # The module namespace is not in the host composer autoloader, so the
+    # module ships a --bootstrap shim that registers its own loader.
+    - name: Module isolated tests (blocking)
+      run: |
+        vendor/bin/phpunit -c phpunit-isolated.xml \
+                           --bootstrap "$MODULE_DIR/tests/isolated-autoload.php" \
+                           "$MODULE_DIR/tests/Isolated"
